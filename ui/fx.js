@@ -1,0 +1,348 @@
+'use strict';
+// The selection stage. The real overlay and every preview in the settings draw with this same code,
+// so what the user sees in the settings is exactly what PrintScreen shows.
+(() => {
+  const $e = (tag, cls, parent) => { const e = document.createElement(tag); if (cls) e.className = cls; if (parent) parent.appendChild(e); return e; };
+  const ACTS = [
+    { id: 'copy', icon: 'copy', t: 'Копировать', k: 'Ctrl+C', pri: true },
+    { id: 'save', icon: 'floppy-disk', t: 'Сохранить', k: 'Ctrl+S' },
+    { id: 'ocr', icon: 'text-t', t: 'Текст', k: 'T' },
+    { id: 'ai', icon: 'sparkle', t: 'Текст через ИИ', k: 'Shift+T', ai: true },
+    { sp: true },
+    { id: 'close', icon: 'x', t: 'Отмена', k: 'Esc' }
+  ];
+  const HS = ['tl', 't', 'tr', 'l', 'r', 'bl', 'b', 'br'];
+
+  function make(root) {
+    const el = $e('div', 'st', root);
+    const shade = $e('div', 'shade', el), blur = $e('img', 'blur', shade); $e('div', 'tint', shade);
+    const hole = $e('div', 'hole', el), sharp = $e('img', '', hole);
+    const cx = $e('div', 'cx', el), cy = $e('div', 'cy', el);
+    const fr = $e('div', 'fr', el);
+    const lab = $e('div', 'lab', el);
+    const mag = $e('div', 'mag', el), g = $e('div', 'g', mag), hx = $e('div', 'hx', mag);
+    const bar = $e('div', 'bar', el);
+    const flash = $e('div', 'flash', el);
+    const hint = $e('div', 'hint', el);
+    const st = { el, W: 0, H: 0, dpr: 1, url: '', r: null, adj: false, c: {}, ai: false, onAct: null, cv: null, cvx: null };
+
+    st.frame = (url, W, H, dpr) => {
+      st.url = url; st.W = W; st.H = H; st.dpr = dpr || 1;
+      for (const i of [blur, sharp]) { i.src = url; i.style.width = W + 'px'; i.style.height = H + 'px'; }
+      st.cv = null;
+      return Promise.all([blur, sharp].map(i => i.decode ? i.decode().catch(() => {}) : Promise.resolve()));
+    };
+
+    st.cfg = c => {
+      st.c = c;
+      const s = el.style;
+      s.setProperty('--fc', c.frameColor);
+      s.setProperty('--fcA', RS.hexA(c.frameColor, .45));
+      s.setProperty('--fw', c.frameW + 'px');
+      s.setProperty('--fr', c.frameR + 'px');
+      s.setProperty('--hs', c.handleSize + 'px');
+      s.setProperty('--gl', Math.max(4, c.frameGlow || 10));
+      s.setProperty('--dim', RS.hexA(c.dimColor, c.dim / 100));
+      s.setProperty('--ms', c.magSize + 'px');
+      blur.style.filter = [c.blur > 0 ? `blur(${c.blur}px)` : '', c.gray ? 'grayscale(1)' : ''].join(' ').trim() || 'none';
+      // a blur shows the screen's edge: grow the picture a bit so the edge stays outside
+      const m = c.blur > 0 ? c.blur * 2 : 0;
+      blur.style.transform = m ? `translate(${-m}px,${-m}px) scale(${(st.W + m * 2) / Math.max(1, st.W)},${(st.H + m * 2) / Math.max(1, st.H)})` : '';
+      blur.style.transformOrigin = '0 0';
+      el.classList.toggle('cdash', c.crossStyle === 'dash');
+      el.classList.toggle('ccol', c.crossStyle === 'color');
+      mag.classList.toggle('sq', c.magShape === 'square');
+      buildFrame();
+      buildBar();
+      if (st.r) place();
+    };
+
+    function buildFrame() {
+      const c = st.c, f = c.frame;
+      fr.className = 'fr ' + ({ circle: 'hc', square: 'hs', bar: 'hb', none: 'hn' }[c.handles] || 'hc');
+      if (c.frameShadow && f !== 'neon' && f !== 'none') fr.classList.add('shadow');
+      if (f === 'neon' || (c.frameGlow > 0 && f === 'solid')) fr.classList.add('glow');
+      if (f === 'ants') fr.classList.add('ants');
+      if (st.adj) fr.classList.add('adj');
+      let h = '';
+      if (f === 'solid' || f === 'neon') h = '<div class="b"></div>';
+      else if (f === 'dashed' || f === 'ants') {
+        const d = f === 'ants' ? '7 7' : `${Math.max(4, c.frameW * 4)} ${Math.max(3, c.frameW * 3)}`;
+        h = `<svg><rect x="0" y="0" width="100%" height="100%" rx="${c.frameR}" stroke-dasharray="${d}"/></svg>`;
+      } else if (f === 'corners') h = '<div class="thin"></div><div class="c tl"></div><div class="c tr"></div><div class="c bl"></div><div class="c br"></div>';
+      h += HS.map(k => `<div class="h ${k}" data-h="${k}"></div>`).join('');
+      fr.innerHTML = h;
+      fr.style.display = f === 'none' && c.handles === 'none' ? 'none' : '';
+    }
+
+    function buildBar() {
+      const c = st.c;
+      bar.className = 'bar' + (c.barStyle === 'square' ? ' sq' : c.barStyle === 'light' ? ' flat' : '') + (bar.classList.contains('on') ? ' on' : '');
+      bar.innerHTML = ACTS.filter(a => !a.ai || st.ai).map(a => a.sp ? '<i class="sp"></i>'
+        : `<button data-a="${a.id}" class="${a.pri ? 'pri' : ''}">${RS.ic(a.icon)}${c.barLabels && a.id !== 'close' ? `<span>${a.t}</span>` : ''}<span class="tt">${a.t}<kbd>${a.k}</kbd></span></button>`).join('');
+    }
+    bar.addEventListener('pointerdown', e => e.stopPropagation());
+    bar.addEventListener('click', e => { const b = e.target.closest('button'); if (b && st.onAct) st.onAct(b.dataset.a); });
+
+    function place() {
+      const r = st.r; if (!r) return;
+      hole.style.transform = `translate(${r.x}px,${r.y}px)`;
+      hole.style.width = r.w + 'px'; hole.style.height = r.h + 'px';
+      sharp.style.transform = `translate(${-r.x}px,${-r.y}px)`;
+      fr.style.transform = `translate(${r.x}px,${r.y}px)`;
+      fr.style.width = r.w + 'px'; fr.style.height = r.h + 'px';
+      fr.style.setProperty('--cl', Math.max(6, Math.min(24, Math.min(r.w, r.h) / 3)) + 'px');
+      // the size
+      const mode = st.c.sizeLabel;
+      if (mode === 'off' || r.w < 2 || r.h < 2) lab.classList.remove('on');
+      else {
+        lab.innerHTML = `${Math.round(r.w * st.dpr)}<i>×</i>${Math.round(r.h * st.dpr)}`;
+        lab.classList.add('on');
+        const lw = lab.offsetWidth || 80;
+        let x, y;
+        if (mode === 'inside') { x = r.x + r.w - lw - 6; y = r.y + r.h - 28; if (r.w < lw + 12 || r.h < 34) { x = r.x + r.w + 6; y = r.y + r.h - 22; } }
+        else { x = r.x; y = r.y - 28; if (y < 4) y = r.y + 6, x = r.x + 6; }
+        lab.style.transform = `translate(${Math.max(4, Math.min(st.W - lw - 4, x))}px,${Math.max(4, Math.min(st.H - 26, y))}px)`;
+      }
+    }
+
+    st.hover = r => {
+      if (st.adj) return;
+      if (!r) { el.classList.add('nohole'); fr.style.visibility = 'hidden'; lab.classList.remove('on'); st.r = null; return; }
+      el.classList.remove('nohole'); fr.style.visibility = ''; fr.classList.add('hov');
+      st.r = r; place();
+    };
+    st.select = (r, adj) => {
+      st.adj = !!adj;
+      el.classList.remove('nohole'); fr.style.visibility = ''; fr.classList.remove('hov');
+      fr.classList.toggle('adj', st.adj);
+      st.r = r; place();
+    };
+
+    st.cursor = (x, y, show) => {
+      const c = st.c;
+      el.classList.toggle('crs', !!(show && c.cross));
+      cx.style.transform = `translateY(${Math.round(y)}px)`;
+      cy.style.transform = `translateX(${Math.round(x)}px)`;
+      if (!show || !c.mag) { mag.classList.remove('on'); return; }
+      const z = c.magZoom, ms = c.magSize, d = st.dpr;
+      const px = Math.floor(x * d), py = Math.floor(y * d);
+      g.style.backgroundImage = `url("${st.url}")`;
+      g.style.backgroundSize = `${st.W * d * z}px ${st.H * d * z}px`;
+      g.style.backgroundPosition = `${ms / 2 - (px + .5) * z}px ${ms / 2 - (py + .5) * z}px`;
+      g.style.setProperty('--z', z + 'px');
+      g.style.setProperty('--go', ((ms / 2 - z / 2) % z) + 'px');
+      if (c.hex) {
+        const col = st.color(px, py);
+        hx.style.display = '';
+        hx.innerHTML = col ? `<b style="background:${col}"></b>${col.toUpperCase()}<span style="opacity:.45">${px}, ${py}</span>` : `${px}, ${py}`;
+      } else hx.style.display = 'none';
+      let mx = x + 24, my = y + 24;
+      if (mx + ms > st.W - 4) mx = x - ms - 24;
+      if (my + ms + 28 > st.H - 4) my = y - ms - 50;
+      mag.style.transform = `translate(${mx}px,${my}px)`;
+      mag.classList.add('on');
+    };
+
+    // the colour under the cursor, from a copy of the picture
+    st.color = (px, py) => {
+      try {
+        if (!st.cv) {
+          const i = sharp; if (!i.naturalWidth) return '';
+          st.cv = document.createElement('canvas'); st.cv.width = i.naturalWidth; st.cv.height = i.naturalHeight;
+          st.cvx = st.cv.getContext('2d', { willReadFrequently: true });
+          st.cvx.drawImage(i, 0, 0);
+        }
+        const p = st.cvx.getImageData(Math.max(0, Math.min(st.cv.width - 1, px)), Math.max(0, Math.min(st.cv.height - 1, py)), 1, 1).data;
+        return '#' + [p[0], p[1], p[2]].map(v => v.toString(16).padStart(2, '0')).join('');
+      } catch (e) { return ''; }
+    };
+
+    st.bar = show => {
+      const was = bar.classList.contains('on');
+      bar.classList.toggle('on', !!show);
+      if (!show) { bar.style.opacity = 0; return; }
+      const r = st.r; if (!r) return;
+      const bw = bar.offsetWidth, bh = bar.offsetHeight;
+      let x = r.x + r.w - bw, y = r.y + r.h + 10, below = true;
+      if (y + bh > st.H - 6) { y = r.y - bh - 10; below = false; }
+      if (y < 6) { y = r.y + r.h - bh - 10; below = true; }
+      x = Math.max(6, Math.min(st.W - bw - 6, x));
+      bar.style.left = x + 'px'; bar.style.top = y + 'px';
+      bar.style.transformOrigin = below ? '100% 0' : '100% 100%';
+      if (!was) RS.anim(bar, { opacity: [0, 1], scale: [.9, 1], y: [below ? -6 : 6, 0] }, RS.spring(300, 35));
+      else bar.style.opacity = 1;
+    };
+
+    st.hint = html => { if (html) hint.innerHTML = html; hint.classList.toggle('on', !!html); };
+
+    st.intro = (cxp, cyp) => {
+      const c = st.c, ms = Math.max(40, c.appearMs);
+      if (c.appear === 'none' || !shade.animate) return;
+      if (c.appear === 'wave') {
+        const R = Math.hypot(Math.max(cxp, st.W - cxp), Math.max(cyp, st.H - cyp));
+        shade.animate([{ clipPath: `circle(0px at ${cxp}px ${cyp}px)` }, { clipPath: `circle(${R}px at ${cxp}px ${cyp}px)` }], { duration: ms * 1.6, easing: 'cubic-bezier(.3,.7,.2,1)' });
+        el.querySelector('.tint').animate([{ opacity: 0 }, { opacity: 1 }], { duration: ms * 1.6 });
+      } else if (c.appear === 'zoom') {
+        el.animate([{ opacity: 0, transform: 'scale(1.015)' }, { opacity: 1, transform: 'none' }], { duration: ms, easing: 'cubic-bezier(.2,.8,.2,1)' });
+      } else el.querySelector('.tint').animate([{ opacity: 0 }, { opacity: 1 }], { duration: ms, easing: 'ease-out' });
+    };
+
+    // the snapshot leaves the screen; target: where the corner card will be
+    st.outro = async (kind, target) => {
+      const c = st.c, r = st.r;
+      if (!r || kind === 'none') return;
+      const gh = $e('div', 'ghost', el), gi = $e('img', '', gh);
+      gi.src = st.url; gi.style.width = st.W + 'px'; gi.style.height = st.H + 'px'; gi.style.transform = `translate(${-r.x}px,${-r.y}px)`;
+      Object.assign(gh.style, { left: r.x + 'px', top: r.y + 'px', width: r.w + 'px', height: r.h + 'px', borderRadius: c.frameR + 'px' });
+      fr.style.visibility = 'hidden'; lab.classList.remove('on'); st.bar(false); mag.classList.remove('on'); el.classList.remove('crs');
+      el.classList.add('nohole');
+      const sp = RS.spring(c.postMs, c.bounce);
+      const ps = [];
+      if (c.flash) ps.push(RS.anim(flash, { opacity: [0, .8, 0] }, { duration: .26 }));
+      ps.push(RS.anim(shade, { opacity: [1, 0] }, { duration: Math.min(.35, c.postMs / 1000) }));
+      const ccx = r.x + r.w / 2, ccy = r.y + r.h / 2;
+      if (kind === 'fly') {
+        const t = target || { x: st.W - 150, y: st.H - 110 };
+        const s = Math.min(1, 220 / Math.max(r.w, r.h * 1.4));
+        gh.style.boxShadow = '0 18px 50px rgba(0,0,0,.45)';
+        await RS.anim(gh, { x: [0, t.x - ccx], y: [0, t.y - ccy], scale: [1, s], borderRadius: [c.frameR + 'px', 12 / s + 'px'] }, sp);
+        await RS.anim(gh, { opacity: [1, 0], scale: [s, s * .92] }, { duration: .14 });
+      } else if (kind === 'shrink') {
+        await RS.anim(gh, { scale: [1, 0], opacity: [1, 0] }, sp);
+      } else if (kind === 'pop') {
+        await RS.anim(gh, { scale: [1, 1.05] }, RS.spring(c.postMs * .4, 50));
+        await RS.anim(gh, { scale: [1.05, .2], opacity: [1, 0] }, { duration: c.postMs / 1600 });
+      } else if (kind === 'peel') {
+        gh.style.boxShadow = '0 24px 60px rgba(0,0,0,.5)';
+        await RS.anim(gh, { rotate: [0, -3], y: [0, -14], scale: [1, 1.03] }, RS.spring(c.postMs * .5, c.bounce));
+        await RS.anim(gh, { rotate: [-3, 7], y: [-14, st.H - r.y + 40], opacity: [1, .9] }, { duration: c.postMs / 1000, ease: [.5, 0, .9, .4] });
+      } else if (kind === 'drop') {
+        await RS.anim(gh, { y: [0, 36], scale: [1, .96], opacity: [1, 0] }, sp);
+      } else if (kind === 'up') {
+        await RS.anim(gh, { y: [0, -(r.y + r.h + 40)], opacity: [1, .8] }, sp);
+      } else {
+        await RS.anim(gh, { opacity: [1, 0] }, { duration: c.postMs / 1000 });
+      }
+      await Promise.all(ps);
+      gh.remove();
+    };
+
+    st.reset = () => {
+      st.r = null; st.adj = false;
+      el.classList.add('nohole'); el.classList.remove('crs');
+      fr.style.visibility = 'hidden'; fr.classList.remove('adj', 'hov');
+      lab.classList.remove('on'); mag.classList.remove('on'); st.bar(false); st.hint('');
+      shade.style.opacity = ''; shade.style.transform = ''; flash.style.opacity = 0;
+      for (const a of el.getAnimations ? el.getAnimations({ subtree: true }) : []) { try { a.cancel(); } catch (e) {} }
+      el.querySelectorAll('.ghost').forEach(x => x.remove());
+    };
+    st.handleAt = target => { const h = target && target.closest && target.closest('.h'); return h && st.adj ? h.dataset.h : null; };
+    st.reset();
+    return st;
+  }
+
+  // ---------------------------------------------------------------- a made-up desktop for the previews
+  function desktop(W, H, d = 2) {
+    const cv = document.createElement('canvas'); cv.width = W * d; cv.height = H * d;
+    const x = cv.getContext('2d'); x.scale(d, d);
+    const g = x.createLinearGradient(0, 0, W, H); g.addColorStop(0, '#1c2b4a'); g.addColorStop(.55, '#2d2250'); g.addColorStop(1, '#4a2238');
+    x.fillStyle = g; x.fillRect(0, 0, W, H);
+    for (const [cx, cy, r, c] of [[.2, .3, .5, 'rgba(120,170,255,.25)'], [.85, .2, .4, 'rgba(255,140,190,.2)'], [.6, .95, .5, 'rgba(255,190,120,.16)']]) {
+      const rg = x.createRadialGradient(cx * W, cy * H, 0, cx * W, cy * H, r * W); rg.addColorStop(0, c); rg.addColorStop(1, 'transparent'); x.fillStyle = rg; x.fillRect(0, 0, W, H);
+    }
+    const rr = (X, Y, w, h, r, f) => { x.beginPath(); x.roundRect(X, Y, w, h, r); x.fillStyle = f; x.fill(); };
+    const font = (s, w = 700) => `${w} ${s}px Manrope, Segoe UI, sans-serif`;
+    const wins = [];
+    // a browser with an article
+    let a = { x: W * .05, y: H * .08, w: W * .55, h: H * .76 }; wins.push(a);
+    x.shadowColor = 'rgba(0,0,0,.45)'; x.shadowBlur = 24; x.shadowOffsetY = 8; rr(a.x, a.y, a.w, a.h, 8, '#f6f5f2'); x.shadowColor = 'transparent';
+    rr(a.x, a.y, a.w, 22, 8, '#e7e5e0'); x.fillStyle = '#e7e5e0'; x.fillRect(a.x, a.y + 12, a.w, 10);
+    for (const [i, c] of ['#ff5f57', '#febc2e', '#28c840'].entries()) { x.beginPath(); x.arc(a.x + 12 + i * 11, a.y + 11, 3.6, 0, 7); x.fillStyle = c; x.fill(); }
+    rr(a.x + 50, a.y + 5, a.w * .5, 12, 6, '#fff');
+    x.fillStyle = '#9a978f'; x.font = font(7, 600); x.fillText('retocker.app/snap', a.x + 58, a.y + 13.5);
+    x.fillStyle = '#1b1b1b'; x.font = font(Math.max(11, a.w * .045), 800); x.fillText('Скриншот за одно', a.x + 18, a.y + 52);
+    x.fillText('движение', a.x + 18, a.y + 52 + a.w * .055);
+    x.fillStyle = '#6b6860'; x.font = font(Math.max(7, a.w * .022), 600);
+    const lines = ['Нажми PrintScreen, выдели область —', 'картинка уже в буфере обмена.', 'Текст со скрина — одной кнопкой.'];
+    lines.forEach((l, i) => x.fillText(l, a.x + 18, a.y + 52 + a.w * .11 + i * a.w * .036));
+    const iy = a.y + 52 + a.w * .11 + 3 * a.w * .036 + 4;
+    const ig = x.createLinearGradient(a.x, iy, a.x + a.w, iy + 60); ig.addColorStop(0, '#ff9a8b'); ig.addColorStop(.5, '#ff6a88'); ig.addColorStop(1, '#a66cff');
+    rr(a.x + 18, iy, a.w * .56, Math.max(20, a.y + a.h - iy - 16), 6, ig);
+    for (let i = 0; i < 5; i++) rr(a.x + a.w * .64, iy + i * 12, a.w * .3 - (i % 2) * 18, 5, 2.5, '#dcd9d2');
+    // a chat
+    const b = { x: W * .57, y: H * .2, w: W * .37, h: H * .56 }; wins.unshift(b);
+    x.shadowColor = 'rgba(0,0,0,.5)'; x.shadowBlur = 30; x.shadowOffsetY = 10; rr(b.x, b.y, b.w, b.h, 10, '#202124'); x.shadowColor = 'transparent';
+    x.fillStyle = 'rgba(255,255,255,.85)'; x.font = font(8.5); x.fillText('Миша', b.x + 30, b.y + 17);
+    x.beginPath(); x.arc(b.x + 17, b.y + 14, 7, 0, 7); x.fillStyle = '#7fb4f0'; x.fill();
+    x.fillStyle = 'rgba(255,255,255,.08)'; x.fillRect(b.x, b.y + 28, b.w, 1);
+    const bub = [[0, .62, 'скинь скрин ошибки'], [1, .5, 'секунду 👇'], [1, .7, 'Ctrl+V — и готово'], [0, .45, 'ого, быстро']];
+    bub.forEach(([me, w, t], i) => {
+      const bw = b.w * w, bx = me ? b.x + b.w - bw - 10 : b.x + 10, by = b.y + 38 + i * (b.h - 50) / 4.4;
+      rr(bx, by, bw, Math.min(20, (b.h - 50) / 5.2), 9, me ? '#3b6fd8' : '#2f3034');
+      x.fillStyle = '#fff'; x.font = font(Math.max(6.5, b.w * .035), 600); x.fillText(t, bx + 8, by + Math.min(20, (b.h - 50) / 5.2) / 2 + 3);
+    });
+    // the taskbar
+    x.fillStyle = 'rgba(20,20,24,.85)'; x.fillRect(0, H - H * .075, W, H * .075);
+    for (let i = 0; i < 6; i++) rr(W / 2 - 66 + i * 22, H - H * .06, 14, 14, 4, i === 0 ? '#7fb4f0' : 'rgba(255,255,255,.22)');
+    return { url: cv.toDataURL('image/png'), wins, W, H, d };
+  }
+
+  // ---------------------------------------------------------------- the looping preview
+  // host: an element with a size; get(): the current settings; o.outro: play the leaving animation too
+  function demo(host, get, o = {}) {
+    host.innerHTML = '';
+    host.style.position = host.style.position || 'relative';
+    const W = host.clientWidth || 600, H = host.clientHeight || 280;
+    const dk = desktop(W, H);
+    const st = make(host);
+    st.ai = true;
+    const cur = $e('div', 'dcur', host);
+    cur.innerHTML = '<svg viewBox="0 0 20 20"><path d="M10 1v6M10 13v6M1 10h6M13 10h6" stroke="#fff" stroke-width="1.6" stroke-linecap="round"/><path d="M10 1v6M10 13v6M1 10h6M13 10h6" stroke="rgba(0,0,0,.5)" stroke-width="3.2" stroke-linecap="round" style="mix-blend-mode:multiply" opacity=".4"/></svg>';
+    let alive = true, run = 0;
+    const sleep = ms => new Promise(r => setTimeout(r, ms));
+    const ease = t => t < .5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+    const mv = (x, y) => { cur.style.transform = `translate(${x - 10}px,${y - 10}px)`; };
+    async function tween(ms, fn) { const t0 = performance.now(); for (;;) { const t = Math.min(1, (performance.now() - t0) / ms); fn(ease(t)); if (t >= 1) return; await new Promise(r => requestAnimationFrame(r)); } }
+    async function loop(id) {
+      await st.frame(dk.url, W, H, dk.d);
+      st.cfg(get());
+      const ok = () => alive && id === run;
+      while (ok()) {
+        const c = get();
+        st.reset(); st.cfg(c); st.intro(W * .3, H * .3);
+        const A = { x: W * .12, y: H * .22 }, B = { x: W * .48, y: H * .64 };
+        let p = { x: W * .78, y: H * .12 };
+        // hover over the chat window: it lights up whole
+        await tween(700, t => { const x = p.x + (W * .74 - p.x) * t, y = p.y + (H * .46 - p.y) * t; mv(x, y); st.cursor(x, y, true); if (c.snapWin && t > .3) st.hover(dk.wins[0]); });
+        if (!ok()) return; await sleep(450);
+        st.hover(null);
+        await tween(600, t => { const x = W * .74 + (A.x - W * .74) * t, y = H * .46 + (A.y - H * .46) * t; mv(x, y); st.cursor(x, y, true); });
+        if (!ok()) return;
+        await tween(900, t => { const x = A.x + (B.x - A.x) * t, y = A.y + (B.y - A.y) * t; mv(x, y); st.cursor(x, y, true); st.select({ x: A.x, y: A.y, w: x - A.x, h: y - A.y }, false); });
+        if (!ok()) return;
+        st.cursor(B.x, B.y, false);
+        st.select({ x: A.x, y: A.y, w: B.x - A.x, h: B.y - A.y }, true);
+        if (c.toolbar !== 'instant') st.bar(true);
+        await sleep(o.outro ? 1100 : 2200);
+        if (!ok()) return;
+        if (o.outro) {
+          cur.style.opacity = 0;
+          await st.outro(c.post, { x: W - 70, y: H - 52 });
+          if (o.onDone) o.onDone();
+          await sleep(900);
+          cur.style.opacity = '';
+        }
+      }
+    }
+    loop(++run);
+    return {
+      st,
+      update() { st.cfg(get()); },
+      restart() { loop(++run); },
+      stop() { alive = false; host.innerHTML = ''; }
+    };
+  }
+
+  window.FX = { make, desktop, demo, ACTS };
+})();

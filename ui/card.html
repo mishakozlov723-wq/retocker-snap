@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Retocker Snap</title>
+<link rel="stylesheet" href="fonts.css">
+<style>
+  :root{--tx:rgba(255,255,255,.92);--tx2:rgba(255,255,255,.58);--tx3:rgba(255,255,255,.36);--ok:#5fcf98;--bad:#ff7a6b}
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{width:100%;height:100%;overflow:hidden;background:transparent;font:600 13px 'Manrope',ui-sans-serif,'Segoe UI',sans-serif;color:var(--tx);user-select:none;-webkit-user-select:none}
+  body{display:flex;align-items:flex-end;justify-content:flex-end;padding:14px}
+  body.l{justify-content:flex-start}
+  body.t{align-items:flex-start}
+  .cd{width:340px;background:#1f1f1f;border-radius:14px;box-shadow:0 0 0 1px rgba(255,255,255,.09),0 22px 50px rgba(0,0,0,.55),0 3px 10px rgba(0,0,0,.35);overflow:hidden;opacity:0;position:relative}
+  .th{position:relative;height:170px;background:#141414 center/contain no-repeat;cursor:grab}
+  .th::after{content:'';position:absolute;inset:0;background:linear-gradient(180deg,transparent 60%,rgba(0,0,0,.35))}
+  .sz{position:absolute;left:10px;bottom:9px;z-index:1;font-size:11px;font-weight:700;color:rgba(255,255,255,.8);font-variant-numeric:tabular-nums}
+  .x{position:absolute;right:8px;top:8px;z-index:2;width:26px;height:26px;border-radius:50%;background:rgba(20,20,20,.75);display:grid;place-items:center;color:#fff;opacity:0;transition:opacity .15s;border:0;cursor:pointer}
+  .cd:hover .x{opacity:1}
+  .x svg{width:13px;height:13px;fill:currentColor}
+  .st{display:flex;align-items:center;gap:8px;padding:10px 12px 4px;font-size:12.5px;font-weight:700}
+  .st i{width:18px;height:18px;border-radius:50%;display:grid;place-items:center;background:var(--ok);color:#111;flex:none}
+  .st i svg{width:11px;height:11px;fill:currentColor}
+  .st.bad i{background:var(--bad)}
+  .st.busy i{background:rgba(255,255,255,.18);animation:sp 1s linear infinite}
+  @keyframes sp{to{transform:rotate(360deg)}}
+  .st .t{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .st small{font-size:11px;color:var(--tx3);font-weight:650}
+  .tx{margin:4px 12px 0;max-height:62px;overflow:hidden;font-size:12px;line-height:1.45;color:var(--tx2);font-weight:550;white-space:pre-wrap;-webkit-mask-image:linear-gradient(180deg,#000 70%,transparent)}
+  .tx.sh{height:40px;border-radius:7px;background:linear-gradient(90deg,rgba(255,255,255,.04),rgba(255,255,255,.1),rgba(255,255,255,.04));background-size:200% 100%;animation:shm 1.1s linear infinite;-webkit-mask-image:none}
+  @keyframes shm{to{background-position:-200% 0}}
+  .bt{display:flex;gap:4px;padding:10px 10px 10px}
+  .bt button{flex:1;height:32px;border-radius:8px;border:0;background:rgba(255,255,255,.06);color:var(--tx);font:650 12px 'Manrope',sans-serif;display:flex;align-items:center;justify-content:center;gap:6px;cursor:pointer;transition:background .1s,transform .1s}
+  .bt button:hover{background:rgba(255,255,255,.11)}
+  .bt button:active{transform:scale(.95)}
+  .bt button.pri{background:#ebebea;color:#191919}
+  .bt button svg{width:15px;height:15px;fill:currentColor}
+  .bar{position:absolute;left:0;bottom:0;height:2px;background:rgba(255,255,255,.35);width:100%;transform-origin:0 50%}
+</style>
+</head>
+<body>
+<div class="cd" id="cd">
+  <div class="th" id="th"><span class="sz" id="sz"></span><button class="x" id="x" title="Закрыть"></button></div>
+  <div class="st" id="st"><i></i><span class="t"></span><small></small></div>
+  <div class="tx" id="tx" hidden></div>
+  <div class="bt" id="bt"></div>
+  <div class="bar" id="bar"></div>
+</div>
+<script src="vendor/motion.js"></script>
+<script src="icons.js"></script>
+<script src="shared.js"></script>
+<script src="card.js"></script>
+</body>
+</html>

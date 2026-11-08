@@ -1,0 +1,70 @@
+/* The installer and the uninstaller (ui/setup.html): a small 640×490 window without the system frame,
+   in the same style as the settings. The live capsule on top is the real engine in preview mode. */
+body.setup{background:var(--bg)}
+.win{display:flex;flex-direction:column;height:100vh}
+.win .tbar{flex:none;background:transparent;border-bottom:0}
+.body{flex:1;min-height:0;display:flex;flex-direction:column;padding:4px 26px 22px;position:relative}
+.stage{height:118px;flex:none;margin-bottom:16px;isolation:isolate}
+
+.scr{display:none;flex-direction:column;flex:1;min-height:0}
+.scr.on{display:flex;animation:scrIn .34s cubic-bezier(.2,.8,.2,1)}
+@keyframes scrIn{from{opacity:0;transform:translateY(6px)}}
+.hd{display:flex;align-items:center;gap:10px;margin-bottom:5px;min-width:0}
+.hd h1{font-size:21px;line-height:1.25;font-weight:750;letter-spacing:-.01em}
+.hd h2{font-size:17px;line-height:1.25;font-weight:750}
+.ver{font-size:11.5px;font-weight:700;color:var(--tx2);background:var(--hv2);border-radius:6px;padding:2px 7px;font-variant-numeric:tabular-nums}
+.setup .lead{margin:0 0 8px;max-width:560px}
+.sub{font-size:12px;color:var(--tx3);font-weight:550;max-width:560px}
+.was{font-size:12px;margin:-2px 0 4px}
+.opts{display:flex;flex-direction:column;gap:1px;margin:2px -10px 0}
+.opts .row{min-height:42px}
+.path{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-variant-numeric:tabular-nums}
+.foot{margin-top:auto;display:flex;align-items:center;gap:8px;padding-top:12px}
+.foot .sp{flex:1}
+.fnote{flex:1;min-width:0;font-size:11.5px;color:var(--tx3);font-weight:600}
+.btn.big{height:34px;padding:0 18px;font-size:13px}
+.btn.red.big{background:rgba(255,122,107,.13);box-shadow:0 0 0 1px rgba(255,122,107,.32)}
+.btn.red.big:hover{background:rgba(255,122,107,.22)}
+.setup .toast{left:50%}
+
+/* the folder picker covers the whole window body */
+#s-pick{position:absolute;inset:0;padding:4px 26px 22px;background:var(--bg);z-index:5}
+.drives{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0 8px}
+.drv{height:46px;min-width:128px;padding:0 12px 0 10px;border-radius:9px;background:var(--seg);display:flex;align-items:center;gap:9px;font-size:12px;font-weight:700;color:var(--tx2);box-shadow:0 0 0 1px transparent;transition:background .12s,box-shadow .12s,color .12s}
+.drv:hover{background:var(--hv2);color:var(--tx)}
+.drv.on{box-shadow:0 0 0 1.5px rgba(255,255,255,.55);color:var(--tx);background:var(--hv2)}
+.drv svg{width:18px;height:18px;color:var(--tx3)}
+.drv.on svg{color:var(--tx2)}
+.drv .dt{display:flex;flex-direction:column;gap:3px;line-height:1.2;min-width:0}
+.drv small{font-size:10.5px;color:var(--tx3);font-weight:600;white-space:nowrap}
+.drv .du{height:3px;border-radius:2px;background:rgba(255,255,255,.1);overflow:hidden;width:100%}
+.drv .du b{display:block;height:100%;background:rgba(255,255,255,.45);border-radius:2px}
+.drv.low .du b{background:var(--bad)}
+.crumbs{display:flex;align-items:center;gap:1px;min-height:26px;font-size:12px;font-weight:650;color:var(--tx2);overflow:hidden;white-space:nowrap}
+.crumbs button{padding:3px 6px;border-radius:5px;max-width:170px;overflow:hidden;text-overflow:ellipsis;transition:background .1s,color .1s}
+.crumbs button:hover{background:var(--hv2);color:var(--tx)}
+.crumbs button.last{color:var(--tx)}
+.crumbs i{color:var(--tx3);font-style:normal;padding:0 1px}
+.flist{flex:1;min-height:0;overflow-y:auto;border:1px solid var(--ln);border-radius:10px;padding:4px;margin:6px 0 10px;background:rgba(255,255,255,.018)}
+.fi{display:flex;align-items:center;gap:9px;height:30px;padding:0 9px;border-radius:7px;font-size:12.5px;font-weight:600;color:var(--tx2);cursor:pointer;white-space:nowrap;transition:background .08s,color .08s}
+.fi:hover,.fi.act{background:var(--hv2);color:var(--tx)}
+.fi>span{overflow:hidden;text-overflow:ellipsis;min-width:0}
+.fi svg{color:var(--tx3)}
+.fi:hover svg{color:var(--tx2)}
+.fi.new{cursor:default;background:var(--hv)}
+.fi.new input{flex:1;min-width:0;height:24px;border-radius:5px;border:1px solid rgba(255,255,255,.35);background:rgba(255,255,255,.06);padding:0 7px;outline:none;font-size:12.5px;user-select:text;-webkit-user-select:text}
+.fempty{padding:22px 10px;text-align:center;color:var(--tx3);font-size:12px;font-weight:600}
+.pres{display:flex;align-items:baseline;gap:8px;font-size:12.5px;min-width:0}
+.pres .k{color:var(--tx3);font-weight:650;flex:none}
+.pres .path{font-weight:650;color:var(--tx);min-width:0}
+.pwarn{display:flex;align-items:center;gap:7px;font-size:11.5px;font-weight:600;color:#e9c46a;margin-top:5px}
+.pwarn svg{width:14px;height:14px}
+
+/* working */
+.pbar.big{height:8px;border-radius:4px;margin:14px 0 10px}
+.pbar.big b{transition:width .35s cubic-bezier(.3,.7,.2,1)}
+.gstep{font-size:12.5px;color:var(--tx2);font-weight:600}
+.badge{width:26px;height:26px;border-radius:50%;display:grid;place-items:center;flex:none}
+.badge.ok{background:rgba(95,207,152,.16);color:var(--ok)}
+.badge.bad{background:rgba(255,122,107,.16);color:var(--bad)}
+.badge svg{width:15px;height:15px;stroke-width:2.2}

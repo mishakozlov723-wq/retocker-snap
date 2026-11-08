@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8"><title>Установка Retocker Snap</title>
+<link rel="stylesheet" href="fonts.css"><link rel="stylesheet" href="engine.css"><link rel="stylesheet" href="settings.css"><link rel="stylesheet" href="setup.css">
+</head><body class="setup">
+<div class="win">
+  <div class="tbar">
+    <div class="drag" data-tauri-drag-region><svg viewBox="0 0 64 64" style="width:16px;height:16px" data-tauri-drag-region><rect width="64" height="64" rx="15" fill="#1c1c1c" stroke="none"/><path d="M16 27v-7a4 4 0 0 1 4-4h7M37 16h7a4 4 0 0 1 4 4v7M48 37v7a4 4 0 0 1-4 4h-7M27 48h-7a4 4 0 0 1-4-4v-7" fill="none" stroke="#fff" stroke-width="4.5" stroke-linecap="round"/><circle cx="32" cy="32" r="5" fill="#fff" stroke="none"/></svg><span data-tauri-drag-region id="ttl">Установка Retocker Snap</span></div>
+    <button class="wb" id="wMin" title="Свернуть"><svg viewBox="0 0 16 16"><path d="M3.5 8h9"/></svg></button>
+    <button class="wb x" id="wClose" title="Закрыть"><svg viewBox="0 0 16 16"><path d="m4 4 8 8m0-8-8 8"/></svg></button>
+  </div>
+  <div class="body">
+    <div class="pv stage" id="pv"></div>
+
+    <!-- install: the start -->
+    <section class="scr" id="s-welcome">
+      <div class="hd"><h1>Retocker Snap</h1><span class="ver" id="wVer"></span></div>
+      <p class="lead">Диктовка в любую программу: говоришь — текст появляется там, где курсор.</p>
+      <div class="status ok was" id="wWas" hidden><i></i><span></span></div>
+      <div class="opts">
+        <div class="row"><div class="lbl"><span class="t">Папка</span><small class="path" id="wDir"></small></div><button class="btn" id="wPick">Изменить</button></div>
+        <label class="row"><div class="lbl"><span class="t">Запускать вместе с Windows</span><small>PrintScreen будет работать сразу после включения компьютера</small></div><input type="checkbox" class="sw" id="wAuto"></label>
+        <label class="row"><div class="lbl"><span class="t">Ярлык на рабочем столе</span><small>В меню «Пуск» ярлык будет в любом случае</small></div><input type="checkbox" class="sw" id="wDesk"></label>
+      </div>
+      <div class="foot"><span class="fnote" id="wNote"></span><button class="btn pri big" id="wGo">Установить</button></div>
+    </section>
+
+    <!-- install: choosing a folder -->
+    <section class="scr" id="s-pick">
+      <div class="hd"><h2>Куда установить</h2></div>
+      <div class="drives" id="pDrives"></div>
+      <div class="crumbs" id="pCrumbs"></div>
+      <div class="flist" id="pList"></div>
+      <div class="pres"><span class="k">Установлю в</span><span class="path" id="pRes"></span></div>
+      <div class="pwarn" id="pWarn" hidden><svg viewBox="0 0 16 16"><path d="M8 2.2 14.2 13H1.8z"/><path d="M8 6.6v2.9M8 11.2h.01"/></svg><span>Для этой папки Windows спросит разрешение администратора</span></div>
+      <div class="foot"><button class="btn" id="pNew"><svg viewBox="0 0 16 16"><path d="M2 4.6h4.2l1.4 1.5H14v6.6H2z"/><path d="M8 7.8v3.3M6.35 9.45h3.3"/></svg>Новая папка</button><span class="sp"></span><button class="btn" id="pCancel">Отмена</button><button class="btn pri" id="pOk">Выбрать</button></div>
+    </section>
+
+    <!-- install / uninstall: working -->
+    <section class="scr" id="s-prog">
+      <div class="hd"><h1 id="gTitle">Устанавливаю…</h1></div>
+      <div class="pbar big"><b id="gBar"></b></div>
+      <div class="gstep" id="gStep">Готовлюсь…</div>
+    </section>
+
+    <!-- install: finished -->
+    <section class="scr" id="s-done">
+      <div class="hd"><span class="badge ok"><svg viewBox="0 0 16 16"><path d="m3.6 8.4 2.9 2.9 5.9-6"/></svg></span><h1>Готово</h1></div>
+      <p class="lead" id="dTxt"></p>
+      <p class="sub" id="dSub"></p>
+      <div class="foot"><span class="sp"></span><button class="btn" id="dClose">Закрыть</button><button class="btn pri big" id="dRun">Запустить</button></div>
+    </section>
+
+    <!-- install / uninstall: something went wrong -->
+    <section class="scr" id="s-err">
+      <div class="hd"><span class="badge bad"><svg viewBox="0 0 16 16"><path d="M8 4.2v4.6M8 11.4h.01"/></svg></span><h1 id="eTitle">Не получилось установить</h1></div>
+      <p class="lead" id="eTxt"></p>
+      <div class="foot"><span class="sp"></span><button class="btn" id="eClose">Закрыть</button><button class="btn pri big" id="eRetry">Попробовать ещё раз</button></div>
+    </section>
+
+    <!-- uninstall: the start -->
+    <section class="scr" id="s-un">
+      <div class="hd"><h1>Удалить Retocker Snap?</h1></div>
+      <p class="lead">Уберу программу, ярлыки и автозапуск.</p>
+      <div class="opts">
+        <label class="row"><div class="lbl"><span class="t">Удалить настройки и ключ Groq</span><small>Если оставить — после новой установки всё будет как сейчас</small></div><input type="checkbox" class="sw" id="uWipe"></label>
+      </div>
+      <div class="foot"><span class="sp"></span><button class="btn" id="uCancel">Отмена</button><button class="btn red big" id="uGo">Удалить</button></div>
+    </section>
+
+    <!-- uninstall: finished -->
+    <section class="scr" id="s-undone">
+      <div class="hd"><span class="badge ok"><svg viewBox="0 0 16 16"><path d="m3.6 8.4 2.9 2.9 5.9-6"/></svg></span><h1>Retocker Snap удалена</h1></div>
+      <p class="lead" id="udTxt"></p>
+      <div class="foot"><span class="sp"></span><button class="btn pri big" id="udClose">Закрыть</button></div>
+    </section>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+<script src="vendor/motion.js"></script><script src="shared.js"></script><script src="setup.js"></script><script src="engine.js"></script>
+</body></html>

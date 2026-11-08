@@ -1,0 +1,29 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Retocker Snap",
+  "mainBinaryName": "retocker-snap",
+  "version": "0.1.0",
+  "identifier": "com.retocker.snap",
+  "build": {
+    "frontendDist": "../ui"
+  },
+  "app": {
+    "withGlobalTauri": true,
+    "windows": [],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["nsis"],
+    "publisher": "Retocker",
+    "copyright": "Retocker",
+    "shortDescription": "Скриншоты для Windows",
+    "longDescription": "Быстрые красивые скриншоты: выделил — скопировал, сохранил или достал текст.",
+    "icon": ["icons/32x32.png", "icons/128x128.png", "icons/128x128@2x.png", "icons/icon.ico"],
+    "windows": {
+      "webviewInstallMode": { "type": "downloadBootstrapper", "silent": true }
+    }
+  }
+}

@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8"><title>Retocker Snap</title>
+<link rel="stylesheet" href="fonts.css"><link rel="stylesheet" href="fx.css"><link rel="stylesheet" href="settings.css">
+</head><body>
+<div class="app">
+  <div class="tbar">
+    <div class="drag" data-tauri-drag-region><svg viewBox="0 0 64 64" style="width:16px;height:16px" data-tauri-drag-region><rect width="64" height="64" rx="15" fill="#1c1c1c" stroke="none"/><path d="M16 27v-7a4 4 0 0 1 4-4h7M37 16h7a4 4 0 0 1 4 4v7M48 37v7a4 4 0 0 1-4 4h-7M27 48h-7a4 4 0 0 1-4-4v-7" stroke="#fff" stroke-width="4.5" fill="none"/><circle cx="32" cy="32" r="5" fill="#fff" stroke="none"/></svg><span data-tauri-drag-region>Retocker Snap</span></div>
+    <button class="wb" data-w="min" title="Свернуть"><svg viewBox="0 0 16 16"><path d="M3.5 8h9"/></svg></button>
+    <button class="wb x" data-w="close" title="Закрыть — программа продолжит работать в трее"><svg viewBox="0 0 16 16"><path d="m4 4 8 8m0-8-8 8"/></svg></button>
+  </div>
+  <nav class="nav" id="nav">
+    <button class="ni" data-p="home" data-i="house">Главная</button>
+    <button class="ni" data-p="sel" data-i="selection">Рамка</button>
+    <button class="ni" data-p="bg" data-i="drop-half">Фон</button>
+    <button class="ni" data-p="help" data-i="crosshair">Помощники</button>
+    <button class="ni" data-p="after" data-i="magic-wand">После снимка</button>
+    <button class="ni" data-p="save" data-i="folder">Сохранение</button>
+    <button class="ni" data-p="text" data-i="text-t">Текст со скрина<i class="dot blue" id="keyDot" hidden></i></button>
+    <button class="ni" data-p="keys" data-i="keyboard">Клавиши</button>
+    <button class="ni" data-p="hist" data-i="clock-counter-clockwise">История</button>
+    <button class="ni" data-p="app" data-i="gear">Программа<i class="dot blue" id="updDot" hidden></i></button>
+    <div class="nsp"></div>
+    <div class="nfoot" id="nfoot"></div>
+  </nav>
+  <div class="main">
+    <div class="pvw" id="pvw"><div class="pv" id="pv"></div><div class="pvtag" id="pvtag">Живой пример — так будет по PrintScreen</div></div>
+    <div class="scroll" id="scroll">
+      <section class="page" id="p-home"></section>
+      <section class="page" id="p-sel"></section>
+      <section class="page" id="p-bg"></section>
+      <section class="page" id="p-help"></section>
+      <section class="page" id="p-after"></section>
+      <section class="page" id="p-save"></section>
+      <section class="page" id="p-text"></section>
+      <section class="page" id="p-keys"></section>
+      <section class="page" id="p-hist"></section>
+      <section class="page" id="p-app"></section>
+    </div>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+<script src="vendor/motion.js"></script><script src="icons.js"></script><script src="shared.js"></script><script src="fx.js"></script><script src="settings.js"></script>
+</body></html>

@@ -32,7 +32,7 @@ pub fn windows(w: u32, h: u32, bgra: &[u8], lang: &str) -> Result<String, String
     dw.WriteBytes(&data).map_err(e)?;
     let buf = dw.DetachBuffer().map_err(e)?;
     let bmp = SoftwareBitmap::CreateCopyFromBuffer(&buf, BitmapPixelFormat::Bgra8, w as i32, h as i32).map_err(e)?;
-    let res = engine.RecognizeAsync(&bmp).map_err(e)?.get().map_err(e)?;
+    let res = engine.RecognizeAsync(&bmp).map_err(e)?.join().map_err(e)?;
     let lines = res.Lines().map_err(e)?;
     let mut out = Vec::new();
     for i in 0..lines.Size().map_err(e)? {

@@ -50,6 +50,7 @@
   }
 
   const C = () => st.c;
+  const wait = ms => new Promise(res => setTimeout(res, ms));
   const sc = v => v / dpr;
   const inR = (x, y, q) => q && x >= q.x && y >= q.y && x < q.x + q.w && y < q.y + q.h;
   function under(x, y) {
@@ -116,8 +117,7 @@
   async function capEnd() {
     if (state !== 'capsule') return;
     state = 'closing'; clearTimeout(capT);
-    await st.capClose();
-    close();
+    try { await Promise.race([st.capClose(), wait(900)]); } finally { close(); }
   }
   st.onCap = a => a === 'close' ? capEnd() : capDo(a);
   st.onCapHover = on => { capHov = on; if (on) clearTimeout(capT); else armCap(); };
@@ -152,8 +152,7 @@
   async function radEnd() {
     if (state !== 'radial') return;
     state = 'closing'; clearTimeout(radT);
-    await st.radClose();
-    close();
+    try { await Promise.race([st.radClose(), wait(900)]); } finally { close(); }
   }
   st.onRad = a => a === 'close' ? radEnd() : radDo(a);
   st.onRadHover = on => { radHov = on; if (on) clearTimeout(radT); else armRad(); };
@@ -211,8 +210,11 @@
   addEventListener('contextmenu', e => e.preventDefault());
 
   addEventListener('keydown', e => {
-    if (state === 'off' || busy) return;
+    if (state === 'off') return;
     const k = e.key;
+    // a hung close must never leave the dark screen behind
+    if (state === 'closing') { if (k === 'Escape') close(); return; }
+    if (busy && k !== 'Escape') return;
     if (state === 'capsule') {
       if (k === 'Escape' || k === 'Enter') { e.preventDefault(); return capEnd(); }
       if (e.ctrlKey && (k === 'c' || k === 'с')) { e.preventDefault(); return capDo('copy'); }

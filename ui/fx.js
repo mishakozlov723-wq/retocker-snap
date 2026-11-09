@@ -377,6 +377,7 @@
     st.intro = (cxp, cyp) => {
       const c = st.c, ms = Math.max(40, c.appearMs);
       const done = () => { el.style.opacity = ''; tint.style.opacity = ''; shade.style.clipPath = ''; };
+      setTimeout(done, ms * 2 + 400); // the dim always ends up on, even if an animation never reports back
       if (c.appear === 'none') return done();
       if (c.appear === 'wave') {
         const R = Math.hypot(Math.max(cxp, st.W - cxp), Math.max(cyp, st.H - cyp));

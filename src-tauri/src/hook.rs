@@ -331,6 +331,8 @@ fn now_ms() -> u64 {
 static LAST_KEY: AtomicU64 = AtomicU64::new(0);
 static HOOK_TID: AtomicU32 = AtomicU32::new(0);
 static REHOOK_AT: AtomicU64 = AtomicU64::new(0);
+static REFRESH_AT: AtomicU64 = AtomicU64::new(0);
+static STARTED: AtomicBool = AtomicBool::new(false);
 const WM_REHOOK: u32 = WM_APP + 1;
 
 fn rehook(now: u64) -> bool {
@@ -361,6 +363,19 @@ fn watch_loop() {
       press = Some(now);
     }
     was = down;
+    // a hook that has heard nothing for a while is quietly set up again (cheap, and it may be silently gone)
+    let quiet = now.saturating_sub(LAST_KEY.load(Ordering::Relaxed).max(REFRESH_AT.load(Ordering::Relaxed)));
+    let first = !STARTED.load(Ordering::Relaxed) && now > 4000;
+    if (first || quiet > 20_000) && !down {
+      STARTED.store(true, Ordering::Relaxed);
+      REFRESH_AT.store(now, Ordering::Relaxed);
+      let tid = HOOK_TID.load(Ordering::Relaxed);
+      if tid != 0 {
+        unsafe {
+          let _ = PostThreadMessageW(tid, WM_REHOOK, WPARAM(1), LPARAM(0));
+        }
+      }
+    }
     let Some(p) = press else { continue };
     if now < p + 300 {
       continue;
@@ -394,9 +409,11 @@ pub fn start(on_ev: impl Fn(Ev) + Send + 'static) {
     );
     let tid = windows::Win32::System::Threading::GetCurrentThreadId();
     HOOK_TID.store(tid, Ordering::Relaxed);
-    let install = || match SetWindowsHookExW(WH_KEYBOARD_LL, Some(proc_), Some(hmod), 0) {
+    let install = |quiet: bool| match SetWindowsHookExW(WH_KEYBOARD_LL, Some(proc_), Some(hmod), 0) {
       Ok(h) => {
-        crate::logx::log(&format!("keyboard hook on (thread {tid})"));
+        if !quiet {
+          crate::logx::log(&format!("keyboard hook on (thread {tid})"));
+        }
         Some(h)
       }
       Err(e) => {
@@ -404,7 +421,7 @@ pub fn start(on_ev: impl Fn(Ev) + Send + 'static) {
         None
       }
     };
-    let mut hook = install();
+    let mut hook = install(false);
     let _ = SetTimer(None, 0, 5000, None);
     let mut m = MSG::default();
     loop {
@@ -416,7 +433,7 @@ pub fn start(on_ev: impl Fn(Ev) + Send + 'static) {
         if let Some(h) = hook.take() {
           let _ = UnhookWindowsHookEx(h);
         }
-        hook = install();
+        hook = install(m.wParam.0 == 1);
         continue;
       }
       let _ = TranslateMessage(&m);

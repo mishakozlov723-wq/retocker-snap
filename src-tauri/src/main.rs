@@ -118,15 +118,18 @@ fn start_overlay(app: &AppHandle, mode: &str) {
   let ov = h(&OVL);
   win::place(ov, RECT { left: fx, top: fy, right: fx + fw, bottom: fy + fh });
   let last = LAST.lock().unwrap_or_else(|e| e.into_inner()).map(|r| json!({ "x": r.x - fx, "y": r.y - fy, "w": r.w, "h": r.h }));
-  let _ = app.emit_to(
-    "ovl",
-    "shot",
-    json!({ "n": n, "w": fw, "h": fh, "wins": wins, "mons": mons, "cur": [cx - fx, cy - fy], "mode": mode, "last": last, "cfg": cfg::all() }),
-  );
+  let payload = json!({ "n": n, "w": fw, "h": fh, "wins": wins, "mons": mons, "cur": [cx - fx, cy - fy], "mode": mode, "last": last, "cfg": cfg::all() });
+  let _ = app.emit_to("ovl", "shot", &payload);
   // if the page never answers (it crashed), don't leave the hotkey dead
   let a = app.clone();
   std::thread::spawn(move || {
     std::thread::sleep(Duration::from_millis(2500));
+    if ACTIVE.load(Ordering::SeqCst) && !visible(h(&OVL)) && SEQ.load(Ordering::SeqCst) == n {
+      // the page may have missed the event: ask once more before giving up
+      logx::log("overlay did not answer: asking again");
+      let _ = a.emit_to("ovl", "shot", &payload);
+      std::thread::sleep(Duration::from_millis(2500));
+    }
     if ACTIVE.load(Ordering::SeqCst) && !visible(h(&OVL)) && SEQ.load(Ordering::SeqCst) == n {
       // showing a page that did not draw leaves an invisible window over the screen that eats every click
       logx::log("overlay did not answer: closing it");

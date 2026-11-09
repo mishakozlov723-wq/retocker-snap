@@ -262,6 +262,9 @@ fn handle(down: bool, kb: &KBDLLHOOKSTRUCT) -> bool {
   }
   let repeat = down && bit != 0 && s.held & bit != 0;
   sync_held(&mut s, bit);
+  if debug() && down && !repeat {
+    send(Ev::Dbg(format!("key {} held {:02X}", vk_name(vk), s.held | bit)));
+  }
   if bit != 0 {
     if down {
       s.held |= bit

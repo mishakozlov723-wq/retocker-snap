@@ -7,7 +7,8 @@
   let a0 = null, r = null, drag = null, hov = null, mx = 0, my = 0;
   const P = v => Math.round(v * dpr);
 
-  RS.listen('shot', e => start(e.payload).catch(err => { RS.log('ovl start ' + err); RS.invoke('ovl_ready', { n: e.payload.n }).catch(() => {}); }));
+  // a page that cannot draw the frame closes itself instead of showing an empty window over the screen
+  RS.listen('shot', e => start(e.payload).catch(err => { RS.log('ovl start ' + err); state = 'off'; RS.invoke('ovl_hide').catch(() => {}); }));
   RS.listen('abort', () => { if (state === 'off') return; state = 'off'; busy = false; clearTimeout(radT); clearTimeout(capT); st.reset(); root.classList.remove('ready'); });
   setInterval(() => { if (state !== 'off') RS.invoke('ovl_alive').catch(() => {}); }, 1000);
   RS.listen('force', () => { root.classList.add('ready'); if (state === 'idle') st.intro(mx, my); });
@@ -26,7 +27,10 @@
     st.ai = !!(c.groqKey || '').trim();
     st.reset();
     root.classList.remove('ready');
-    await st.frame('http://snap.localhost/frame?n=' + d.n, W, H, dpr);
+    const t0 = performance.now();
+    await Promise.race([st.frame('http://snap.localhost/frame?n=' + d.n, W, H, dpr), new Promise(res => setTimeout(res, 1500))]);
+    const dt = Math.round(performance.now() - t0);
+    if (dt > 600) RS.log(`ovl frame ${d.n} took ${dt} ms`);
     st.cfg(c);
     a0 = null; r = null; drag = null; hov = null; state = 'idle';
     document.body.className = '';

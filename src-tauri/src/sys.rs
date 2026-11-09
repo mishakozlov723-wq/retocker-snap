@@ -413,3 +413,14 @@ pub fn webview2_ensure() -> bool {
   message("WebView2 не установился. Скачай его с сайта Microsoft (Evergreen Bootstrapper) и запусти Retocker Snap ещё раз.", true);
   false
 }
+
+
+/// Windows 11 "Use the Print Screen key to open screen capture" (HKCU, no admin needed)
+pub fn print_screen_snipping(on: bool) {
+  use std::os::windows::process::CommandExt;
+  let r = std::process::Command::new("reg")
+    .args(["add", r"HKCU\Control Panel\Keyboard", "/v", "PrintScreenKeyForSnippingEnabled", "/t", "REG_DWORD", "/d", if on { "1" } else { "0" }, "/f"])
+    .creation_flags(0x0800_0000)
+    .output();
+  crate::logx::log(&format!("system PrintScreen snipping {}: {}", if on { "on" } else { "off" }, r.map(|o| o.status.success()).unwrap_or(false)));
+}

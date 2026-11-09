@@ -8,6 +8,8 @@
   const P = v => Math.round(v * dpr);
 
   RS.listen('shot', e => start(e.payload).catch(err => { RS.log('ovl start ' + err); RS.invoke('ovl_ready', { n: e.payload.n }).catch(() => {}); }));
+  RS.listen('abort', () => { if (state === 'off') return; state = 'off'; busy = false; clearTimeout(radT); clearTimeout(capT); st.reset(); root.classList.remove('ready'); });
+  setInterval(() => { if (state !== 'off') RS.invoke('ovl_alive').catch(() => {}); }, 1000);
   RS.listen('force', () => { root.classList.add('ready'); if (state === 'idle') st.intro(mx, my); });
   RS.listen('test_sel', e => {
     const [x, y, w, h, act] = String(e.payload || '').split(',');
@@ -93,6 +95,8 @@
     const c = C(), a = c.capAct || 'copy';
     const job = a !== 'none' ? RS.invoke('shot_do', { r: rpx(), action: a, card: false }).then(() => '', e => String(e || 'Не получилось')) : Promise.resolve('');
     await st.capOpen(c.capPos || 'place', monsCss(), a);
+    const R = st._cap;
+    if (R && state === 'capsule') RS.invoke('ovl_pass', { r: { x: P(R.C.x), y: P(R.C.y), w: P(R.C.w), h: P(R.C.h) } }).catch(() => {});
     const err = await job;
     if (err) { RS.log('shot_do ' + err); st.capDone(a, false, err.slice(0, 40)); }
     busy = false;

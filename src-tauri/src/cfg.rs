@@ -62,5 +62,6 @@ pub fn hotkeys() -> Vec<(String, String)> {
   [("area", "PrintScreen"), ("full", "Shift+PrintScreen"), ("window", "Alt+PrintScreen"), ("text", "Ctrl+PrintScreen"), ("last", "")]
     .iter()
     .map(|(id, d)| (id.to_string(), str_(&format!("hk_{id}"), d)))
+    .chain(bool_("winSnip", true).then(|| ("area".to_string(), "Win+Shift+S".to_string())))
     .collect()
 }

@@ -35,6 +35,10 @@
     const rad = $e('div', 'rad', el);
     const cap = $e('div', 'rad', el);
     const st = { el, W: 0, H: 0, dpr: 1, url: '', r: null, adj: false, c: {}, ai: false, onAct: null, cv: null, cvx: null };
+    // load every font weight the capsule uses right away, so it never measures or paints with a fallback font
+    const FONTS = ['600 12px Manrope', '650 10.5px Manrope', '700 12px Manrope', '750 12.5px Manrope', '800 12px Manrope'];
+    const fontsReady = () => document.fonts ? Promise.all(FONTS.map(f => document.fonts.load(f).catch(() => {}))) : Promise.resolve();
+    fontsReady();
 
     st.frame = (url, W, H, dpr) => {
       st.url = url; st.W = W; st.H = H; st.dpr = dpr || 1;
@@ -301,8 +305,10 @@
       inner.querySelectorAll('.cb').forEach(hoverFx);
       cap.classList.add('on'); // the layer is hidden until then, and a hidden pill measures as zero
       // the font must be there before measuring, or the last button gets cut off
-      if (document.fonts && document.fonts.ready) await Promise.race([document.fonts.ready, new Promise(res => setTimeout(res, 150))]);
+      await Promise.race([fontsReady(), new Promise(res => setTimeout(res, 400))]);
       const Wc = Math.max(420, Math.ceil(inner.getBoundingClientRect().width) + 2), Hc = 60;
+      // the content keeps its final size and sits in the middle of the moving pill: it only fades in, as a whole
+      inner.style.width = Wc + 'px'; inner.style.left = `calc(50% - ${Wc / 2}px)`; inner.style.top = `calc(50% - ${Hc / 2}px)`;
       const cx = r.x + r.w / 2, cy = r.y + r.h / 2;
       const m = (mons || []).find(q => cx >= q.x && cy >= q.y && cx < q.x + q.w && cy < q.y + q.h) || { x: 0, y: 0, w: st.W, h: st.H };
       let x = cx - Wc / 2, y = cy - Hc / 2;
@@ -327,17 +333,11 @@
         p.style.borderRadius = L(c.frameR, 30, q) + 'px';
         p.style.boxShadow = `0 18px 50px rgba(0,0,0,${(.45 * q).toFixed(3)})`;
         bg.style.opacity = Math.min(1, q * 1.6);
+        const o = Math.max(0, Math.min(1, (q - .55) / .45));
+        inner.style.opacity = (o * o * (3 - 2 * o)).toFixed(3);
       });
       if (st._cap !== R) return;
-      const ck = inner.querySelector('.ck'), tx = inner.querySelector('.ct'), bs = [...inner.querySelectorAll('.cb')], pth = ck.querySelector('path');
-      ck.style.opacity = 0; tx.style.opacity = 0; bs.forEach(b => b.style.opacity = 0);
       inner.style.opacity = 1;
-      RS.anim(ck, { scale: [.3, 1], opacity: [0, 1] }, RS.spring(360, 45));
-      if (pth) RS.anim(pth, { strokeDashoffset: [1, 0] }, { duration: .36, delay: .1, ease: [.4, 0, .2, 1] });
-      RS.anim(tx, { opacity: [0, 1], x: [-8, 0], filter: ['blur(4px)', 'blur(0px)'] }, RS.spring(320, 0));
-      await Promise.all(bs.map((b, i) => new Promise(res => setTimeout(() => {
-        RS.anim(b, { opacity: [0, 1], x: [-10, 0], scale: [.9, 1] }, RS.spring(300, 20)).then(res, res);
-      }, 60 + i * 45))));
     };
     st.capBusy = id => {
       const R = st._cap; if (!R) return;
@@ -346,20 +346,19 @@
     };
     st.capDone = (id, ok, text) => {
       const R = st._cap; if (!R) return;
-      const ck = R.inner.querySelector('.ck'), b = R.inner.querySelector('.ct b'), pth = ck.querySelector('path');
+      const ck = R.inner.querySelector('.ck'), b = R.inner.querySelector('.ct b');
       ck.classList.remove('busy'); ck.classList.toggle('bad', !ok);
       R.inner.querySelectorAll('.cb').forEach(x => { x.classList.remove('act'); if (ok && x.dataset.a === id) x.classList.add('dn'); });
       b.textContent = text || (ok ? (CAPS[id] || [])[2] || 'Готово' : 'Не получилось');
-      RS.anim(b, { opacity: [0, 1], y: [5, 0], filter: ['blur(3px)', 'blur(0px)'] }, RS.spring(280, 0));
-      RS.anim(ck, { scale: [.6, 1] }, RS.spring(320, 50));
-      if (pth && ok) RS.anim(pth, { strokeDashoffset: [1, 0] }, { duration: .34, ease: [.4, 0, .2, 1] });
+      RS.anim(b, { opacity: [0, 1] }, { duration: .18, ease: [.3, 0, .2, 1] });
+      RS.anim(ck, { scale: [.85, 1] }, RS.spring(260, 0));
     };
     st.capClose = async () => {
       const R = st._cap; if (!R) return;
       st._cap = null;
       const dy = R.pos === 'top' ? -14 : 14;
       R.gh.style.transformOrigin = `${R.C.x + R.C.w / 2 - R.T.x}px ${R.C.y + R.C.h / 2 - R.T.y}px`;
-      await Promise.all([R.p, R.gh].map(x => RS.anim(x, { opacity: [1, 0], y: [0, dy], scale: [1, .94], filter: ['blur(0px)', 'blur(4px)'] }, RS.spring(260, 0))));
+      await Promise.all([R.p, R.gh].map(x => RS.anim(x, { opacity: [1, 0], y: [0, dy], scale: [1, .96] }, RS.spring(240, 0))));
       cap.classList.remove('on'); cap.innerHTML = '';
     };
     st.shadeOff = () => { shade.style.opacity = 0; };

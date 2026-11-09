@@ -24,6 +24,19 @@ function Shot($n) {
   $bmp.Save("shots/$n.png", [System.Drawing.Imaging.ImageFormat]::Png)
   $g.Dispose(); $bmp.Dispose()
 }
+# CPU of the app and its WebView over a few seconds, % of the whole machine, and memory
+function Cpu($label, $sec = 5) {
+  $names = @('retocker-snap', 'msedgewebview2')
+  $a = (Get-Process -Name $names -ErrorAction SilentlyContinue | Measure-Object CPU -Sum).Sum
+  Start-Sleep $sec
+  $ps = Get-Process -Name $names -ErrorAction SilentlyContinue
+  $b = ($ps | Measure-Object CPU -Sum).Sum
+  $pct = [math]::Round(($b - $a) / $sec / [Environment]::ProcessorCount * 100, 1)
+  $ram = [math]::Round(($ps | Measure-Object WorkingSet64 -Sum).Sum / 1MB)
+  $flag = if ($pct -gt 12) { '  <-- HIGH' } else { '' }
+  Log "cpu ${label}: $pct% ram $ram MB$flag"
+}
+function Key($vk, $up) { [W]::keybd_event($vk, 0, $(if ($up) { 2 } else { 0 }), [UIntPtr]::Zero) }
 function Vis($t) { $h = [W]::FindWindow([NullString]::Value, $t); if ($h -eq [IntPtr]::Zero) { 'none' } else { [W]::IsWindowVisible($h) } }
 
 $exe = (Resolve-Path "src-tauri/target/release/retocker-snap.exe").Path
@@ -33,6 +46,7 @@ $p = Start-Process $exe -PassThru
 Start-Sleep 12
 Shot "01-start"
 Log "settings visible: $(Vis 'Retocker Snap')"
+Cpu 'settings open'
 
 $pages = @('home', 'sel', 'bg', 'help', 'after', 'save', 'text', 'keys', 'hist', 'app')
 $i = 10
@@ -85,8 +99,13 @@ Start-Process $exe -ArgumentList '--test-shot', 'area' | Out-Null
 Start-Sleep -Milliseconds 2200
 Shot "39a-dim-idle"
 Start-Process $exe -ArgumentList '--test-sel', '300,200,640,380' | Out-Null
-Start-Sleep -Milliseconds 1400
+# frames while the selection flows into the capsule: nothing inside may appear piece by piece
+$t0 = Get-Date
+for ($k = 0; $k -lt 14; $k++) { Shot ("39f-{0:D2}" -f $k) }
+Log "capsule burst: 14 frames in $([math]::Round(((Get-Date) - $t0).TotalMilliseconds)) ms"
+Start-Sleep -Milliseconds 400
 Shot "39-capsule"
+Cpu 'capsule up' 2
 Log "capsule: card visible $(Vis 'Retocker Snap — снимок') (should be False)"
 Log "capsule: clipboard has an image: $([System.Windows.Forms.Clipboard]::ContainsImage())"
 [W]::keybd_event(0x1B, 0x01, 0, [UIntPtr]::Zero); Start-Sleep -Milliseconds 60; [W]::keybd_event(0x1B, 0x01, 2, [UIntPtr]::Zero)
@@ -109,6 +128,17 @@ Start-Sleep -Milliseconds 500
 Start-Process $exe -ArgumentList '--test-shot', 'full' | Out-Null
 Start-Sleep -Milliseconds 3000
 Shot "35-full"
+[W]::keybd_event(0x1B, 0x01, 0, [UIntPtr]::Zero); Start-Sleep -Milliseconds 60; [W]::keybd_event(0x1B, 0x01, 2, [UIntPtr]::Zero)
+Start-Sleep -Milliseconds 900
+# Win+Shift+S must open Snap instead of the Windows tool
+Key 0x5B $false; Key 0x10 $false; Start-Sleep -Milliseconds 40; Key 0x53 $false; Start-Sleep -Milliseconds 40; Key 0x53 $true; Key 0x10 $true; Key 0x5B $true
+Start-Sleep -Milliseconds 2200
+Shot "35w-winshifts"
+Log "win+shift+s: overlay visible $(Vis 'Retocker Snap — выделение')"
+Key 0x1B $false; Start-Sleep -Milliseconds 40; Key 0x1B $true
+Start-Sleep -Milliseconds 900
+Log "after all flows: overlay visible $(Vis 'Retocker Snap — выделение') (should be False)"
+Cpu 'idle in tray'
 Start-Process $exe -ArgumentList '--test-page', 'hist' | Out-Null
 Start-Sleep -Milliseconds 2000
 Shot "36-history"

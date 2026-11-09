@@ -250,6 +250,13 @@ fn handle(down: bool, kb: &KBDLLHOOKSTRUCT) -> bool {
   if s.swallow.contains(&vk) {
     if !down {
       s.swallow.retain(|v| *v != vk);
+      if bit != 0 {
+        s.held &= !bit;
+      }
+      if s.rec_until.map(|t| std::time::Instant::now() < t).unwrap_or(false) {
+        drop(s);
+        send(Ev::Rec { name: vk_name(vk), down: false, m: bit != 0 });
+      }
     }
     return true;
   }
@@ -378,6 +385,10 @@ pub fn start(on_ev: impl Fn(Ev) + Send + 'static) {
   });
   std::thread::spawn(|| unsafe {
     let hmod: HINSTANCE = GetModuleHandleW(None).map(|h| h.into()).unwrap_or_default();
+    let _ = windows::Win32::System::Threading::SetThreadPriority(
+      windows::Win32::System::Threading::GetCurrentThread(),
+      windows::Win32::System::Threading::THREAD_PRIORITY_TIME_CRITICAL,
+    );
     let tid = windows::Win32::System::Threading::GetCurrentThreadId();
     HOOK_TID.store(tid, Ordering::Relaxed);
     let install = || match SetWindowsHookExW(WH_KEYBOARD_LL, Some(proc_), Some(hmod), 0) {

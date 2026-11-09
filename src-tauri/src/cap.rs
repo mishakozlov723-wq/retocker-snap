@@ -272,3 +272,8 @@ pub fn monitors() -> Vec<Mon> {
   }
   v
 }
+
+/// where the current frozen frame starts on the virtual screen (0,0 if there is none)
+pub fn frame_origin() -> (i32, i32) {
+  FRAME.lock().unwrap_or_else(|e| e.into_inner()).as_ref().map(|(_, f)| (f.x, f.y)).unwrap_or((0, 0))
+}

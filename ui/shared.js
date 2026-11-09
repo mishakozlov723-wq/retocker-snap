@@ -3,7 +3,7 @@
 (() => {
   const DEF = {
     // hotkeys
-    hk_area: 'PrintScreen', hk_full: 'Shift+PrintScreen', hk_window: 'Alt+PrintScreen', hk_text: 'Ctrl+PrintScreen', hk_last: '',
+    hk_area: 'PrintScreen', hk_full: 'Shift+PrintScreen', hk_window: 'Alt+PrintScreen', hk_text: 'Ctrl+PrintScreen', hk_last: '', winSnip: true,
     delay: 0, trayClick: 'snap',
     // the selection frame
     frame: 'solid', frameColor: '#ffffff', frameW: 1.5, frameR: 4, frameGlow: 0, frameShadow: true,

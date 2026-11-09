@@ -128,9 +128,10 @@ fn start_overlay(app: &AppHandle, mode: &str) {
   std::thread::spawn(move || {
     std::thread::sleep(Duration::from_millis(2500));
     if ACTIVE.load(Ordering::SeqCst) && !visible(h(&OVL)) && SEQ.load(Ordering::SeqCst) == n {
-      logx::log("overlay did not answer: showing it anyway");
-      let _ = a.emit_to("ovl", "force", n);
-      ovl_show_now();
+      // showing a page that did not draw leaves an invisible window over the screen that eats every click
+      logx::log("overlay did not answer: closing it");
+      let _ = a.emit_to("ovl", "abort", n);
+      ovl_hide();
     }
   });
 }
@@ -139,7 +140,66 @@ fn visible(hw: HWND) -> bool {
   unsafe { windows::Win32::UI::WindowsAndMessaging::IsWindowVisible(hw).as_bool() }
 }
 
+fn now_ms() -> u64 {
+  std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(0)
+}
+/// the overlay page says it is alive every second while it is open
+static ALIVE: AtomicU64 = AtomicU64::new(0);
+/// while the capsule is up: its box (frame pixels); everywhere else the clicks go through to the apps below
+static PASS: Mutex<Option<(i32, i32, i32, i32)>> = Mutex::new(None);
+
+#[tauri::command]
+fn ovl_alive() {
+  ALIVE.store(now_ms(), Ordering::SeqCst);
+}
+
+#[tauri::command]
+fn ovl_pass(r: Option<Rect>) {
+  *PASS.lock().unwrap_or_else(|e| e.into_inner()) = r.map(|r| (r.x.round() as i32, r.y.round() as i32, r.w.round() as i32, r.h.round() as i32));
+}
+
+/// safety net: an overlay that is open but not alive (or open while nothing is running) is closed,
+/// and while the capsule is shown only the capsule takes clicks
+fn ovl_guard(app: AppHandle) {
+  std::thread::spawn(move || {
+    let mut thru = false;
+    loop {
+      std::thread::sleep(Duration::from_millis(30));
+      let ov = h(&OVL);
+      if ov.0.is_null() {
+        continue;
+      }
+      let vis = visible(ov);
+      let pass = *PASS.lock().unwrap_or_else(|e| e.into_inner());
+      let want = match (vis, pass) {
+        (true, Some((x, y, w, hh))) => {
+          let (fx, fy) = cap::frame_origin();
+          let (cx, cy) = win::cursor();
+          let (px, py) = (cx - fx, cy - fy);
+          !(px >= x - 4 && px <= x + w + 4 && py >= y - 4 && py <= y + hh + 4)
+        }
+        _ => false,
+      };
+      if want != thru {
+        thru = want;
+        if let Some(w) = app.get_webview_window("ovl") {
+          let _ = w.set_ignore_cursor_events(want);
+        }
+      }
+      if vis {
+        let stale = now_ms().saturating_sub(ALIVE.load(Ordering::SeqCst)) > 4000;
+        if !ACTIVE.load(Ordering::SeqCst) || stale {
+          logx::log(if stale { "overlay stopped answering: closing it" } else { "overlay open with nothing running: closing it" });
+          let _ = app.emit_to("ovl", "abort", 0);
+          ovl_hide();
+        }
+      }
+    }
+  });
+}
+
 fn ovl_show_now() {
+  ALIVE.store(now_ms(), Ordering::SeqCst);
   let ov = h(&OVL);
   unsafe {
     let _ = ShowWindow(ov, windows::Win32::UI::WindowsAndMessaging::SW_SHOW);
@@ -386,6 +446,7 @@ fn ovl_ready(n: u64) {
 
 #[tauri::command]
 fn ovl_hide() {
+  *PASS.lock().unwrap_or_else(|e| e.into_inner()) = None;
   unsafe {
     let _ = ShowWindow(h(&OVL), SW_HIDE);
   }
@@ -412,8 +473,11 @@ fn cfg_get() -> Value {
 #[tauri::command]
 fn cfg_set(app: AppHandle, v: Value) {
   cfg::merge(&v);
-  if v.as_object().map(|o| o.keys().any(|k| k.starts_with("hk_"))).unwrap_or(false) {
+  if v.as_object().map(|o| o.keys().any(|k| k.starts_with("hk_") || k == "winSnip")).unwrap_or(false) {
     apply_hotkeys();
+  }
+  if let Some(on) = v.get("winSnip").and_then(|x| x.as_bool()) {
+    sys::print_screen_snipping(!on);
   }
   let _ = app.emit("cfg", &v);
 }
@@ -456,7 +520,7 @@ fn hist_clear() {
 }
 
 fn hist_bgra(id: &str) -> Result<(u32, u32, Vec<u8>, Vec<u8>), String> {
-  let png = hist::read(id, "png").ok_or("��айл не найден")?;
+  let png = hist::read(id, "png").ok_or("файл не найден")?;
   let img = image::load_from_memory_with_format(&png, image::ImageFormat::Png).map_err(|e| e.to_string())?.to_rgba8();
   let (w, hh) = img.dimensions();
   let mut b = img.into_raw();
@@ -758,12 +822,16 @@ fn run_app(ctx: tauri::Context<tauri::Wry>, autostarted: bool) {
     .plugin(tauri_plugin_single_instance::init(|app, args, _cwd| on_second(app, args)))
     .register_uri_scheme_protocol("snap", |_ctx, req| serve(&req))
     .invoke_handler(tauri::generate_handler![
-      ovl_ready, ovl_hide, shot_do, card_hide, cfg_get, cfg_set, hk_record, set_paused, snap_now, hist_list, hist_del, hist_clear, hist_copy,
+      ovl_ready, ovl_hide, ovl_alive, ovl_pass, shot_do, card_hide, cfg_get, cfg_set, hk_record, set_paused, snap_now, hist_list, hist_del, hist_clear, hist_copy,
       hist_text, hist_save, hist_open, copy_text, open_path, open_save_dir, default_save_dir, name_preview, groq_test, show_settings, quit,
       app_info, upd_check, upd_install, autostart, open_url, open_logs, log, win_ctl
     ])
     .setup(move |app| {
       let hnd = app.handle().clone();
+      ovl_guard(hnd.clone());
+      if cfg::bool_("winSnip", true) {
+        std::thread::spawn(|| sys::print_screen_snipping(false));
+      }
       logx::log(&format!("start v{} autostart={autostarted} updated={}", app.package_info().version, UPDATED.get().map(|s| s.as_str()).unwrap_or("")));
       let v = cap::virtual_screen();
 

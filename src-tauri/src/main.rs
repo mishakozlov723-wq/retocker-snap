@@ -93,11 +93,18 @@ fn delay() {
 
 /// the overlay: frozen screen, the user picks an area
 fn start_overlay(app: &AppHandle, mode: &str) {
+  start_overlay_x(app, mode, json!({}));
+}
+
+/// `extra` goes into the payload as is; mode "edit" opens a history picture in the editor (no delay)
+fn start_overlay_x(app: &AppHandle, mode: &str, extra: Value) {
   if ACTIVE.swap(true, Ordering::SeqCst) {
     return;
   }
   hide_card();
-  delay();
+  if mode != "edit" {
+    delay();
+  }
   let n = match grab() {
     Ok(n) => n,
     Err(e) => {
@@ -118,7 +125,19 @@ fn start_overlay(app: &AppHandle, mode: &str) {
   let ov = h(&OVL);
   win::place(ov, RECT { left: fx, top: fy, right: fx + fw, bottom: fy + fh });
   let last = LAST.lock().unwrap_or_else(|e| e.into_inner()).map(|r| json!({ "x": r.x - fx, "y": r.y - fy, "w": r.w, "h": r.h }));
-  let payload = json!({ "n": n, "w": fw, "h": fh, "wins": wins, "mons": mons, "cur": [cx - fx, cy - fy], "mode": mode, "last": last, "cfg": cfg::all() });
+  let mut payload = json!({ "n": n, "w": fw, "h": fh, "wins": wins, "mons": mons, "cur": [cx - fx, cy - fy], "mode": mode, "last": last, "cfg": cfg::all() });
+  if let (Some(p), Some(x)) = (payload.as_object_mut(), extra.as_object()) {
+    for (k, v) in x {
+      p.insert(k.clone(), v.clone());
+    }
+    // the history card on the screen, in frame pixels: the picture flows out of it
+    if let Some(a) = x.get("from_abs").and_then(|v| v.as_array()) {
+      let f: Vec<f64> = a.iter().filter_map(|v| v.as_f64()).collect();
+      if f.len() == 4 {
+        p.insert("from".into(), json!([f[0] - fx as f64, f[1] - fy as f64, f[2], f[3]]));
+      }
+    }
+  }
   let _ = app.emit_to("ovl", "shot", &payload);
   // if the page never answers (it crashed), don't leave the hotkey dead
   let a = app.clone();
@@ -610,6 +629,33 @@ async fn hist_save(id: String) -> Result<String, String> {
   .map_err(|e| e.to_string())?
 }
 
+/// open a history picture in the editor; `r` is its card in the settings window (CSS pixels)
+#[tauri::command]
+fn hist_edit(app: AppHandle, id: String, r: Option<Rect>) -> Result<(), String> {
+  if !hist::valid(&id) {
+    return Err("Снимок не найден".into());
+  }
+  let png = hist::read(&id, "png").ok_or("Снимок не найден")?;
+  if png.len() < 24 || &png[1..4] != b"PNG" {
+    return Err("Снимок повреждён".into());
+  }
+  let w = u32::from_be_bytes([png[16], png[17], png[18], png[19]]);
+  let hh = u32::from_be_bytes([png[20], png[21], png[22], png[23]]);
+  if ACTIVE.load(Ordering::SeqCst) {
+    return Err("Сначала закончи текущий снимок".into());
+  }
+  let from = r.and_then(|r| {
+    let mw = app.get_webview_window("main")?;
+    let p = mw.inner_position().ok()?;
+    let s = mw.scale_factor().ok()?;
+    Some(json!([p.x as f64 + r.x * s, p.y as f64 + r.y * s, r.w * s, r.h * s]))
+  });
+  logx::log(&format!("history editor {id} {w}x{hh}"));
+  let a = app.clone();
+  std::thread::spawn(move || start_overlay_x(&a, "edit", json!({ "hist": id, "hw": w, "hh": hh, "from_abs": from })));
+  Ok(())
+}
+
 #[tauri::command]
 fn hist_open(id: String) {
   if let Some(p) = hist::png_path(&id) {
@@ -868,7 +914,7 @@ fn run_app(ctx: tauri::Context<tauri::Wry>, autostarted: bool) {
     .register_uri_scheme_protocol("snap", |_ctx, req| serve(&req))
     .invoke_handler(tauri::generate_handler![
       ovl_ready, ovl_hide, ovl_alive, ovl_pass, shot_do, card_hide, cfg_get, cfg_set, hk_record, set_paused, snap_now, hist_list, hist_del, hist_clear, hist_copy,
-      hist_text, hist_save, hist_open, copy_text, open_path, open_save_dir, default_save_dir, name_preview, groq_test, show_settings, quit,
+      hist_text, hist_save, hist_open, hist_edit, copy_text, open_path, open_save_dir, default_save_dir, name_preview, groq_test, show_settings, quit,
       app_info, upd_check, upd_install, autostart, open_url, open_logs, log, win_ctl, ed_put
     ])
     .setup(move |app| {

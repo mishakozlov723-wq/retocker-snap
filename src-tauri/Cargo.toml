@@ -51,8 +51,9 @@ windows = { version = "0.62", features = [
 ] }
 
 [profile.release]
-codegen-units = 1
-lto = true
+# thin LTO and parallel codegen: the build takes minutes less, the program runs the same
+codegen-units = 16
+lto = "thin"
 opt-level = 3
 panic = "unwind"
 strip = true

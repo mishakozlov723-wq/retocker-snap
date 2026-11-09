@@ -7,7 +7,9 @@
   const L = (a, b, t) => a + (b - a) * t;
   const cl = (v, a, b) => Math.max(a, Math.min(b, v));
   const OPT_H = 48, BAR_H = 52, GAP = 14, RAD = 14, THUMB_R = 12;
+  const SHAPES = new Set(['rect', 'ellipse', 'line', 'arrow']), LPN = 11, LPZ = 10, BH = ['tl', 't', 'tr', 'r', 'br', 'b', 'bl', 'l'];
   const TOOLS = [
+    { id: 'select', i: 'cursor', t: 'Выбор', k: 'V' },
     { id: 'brush', i: 'paint-brush', t: 'Кисть', k: 'B' },
     { id: 'marker', i: 'highlighter-circle', t: 'Маркер', k: 'M' },
     { id: 'rect', i: 'square', t: 'Прямоугольник', k: 'R' },
@@ -16,6 +18,7 @@
     { id: 'arrow', i: 'arrow-up-right', t: 'Стрелка', k: 'A' },
     { id: 'text', i: 'text-aa', t: 'Текст', k: 'T' },
     { id: 'blur', i: 'drop-half', t: 'Размытие', k: 'U' },
+    { id: 'pick', i: 'eyedropper', t: 'Пипетка', k: 'I' },
     { id: 'crop', i: 'crop', t: 'Обрезка', k: 'C' },
     { id: 'eraser', i: 'eraser', t: 'Ластик', k: 'E' },
   ];
@@ -160,8 +163,8 @@
     const c = o.cfg || {};
     E = {
       o, done, ops: [], redo: [], ver: 0, copied: 0, saved: false, histVer: 0, busy: false, closing: false, ui: false,
-      drag: null, tx: null, hideText: -1, mvLive: null, raf: 0,
-      tool: DRAW.has(c.edTool) ? c.edTool : 'brush', prevTool: 'brush',
+      drag: null, tx: null, hideText: -1, pv: null, seli: -1, raf: 0, bc: new Map(),
+      tool: DRAW.has(c.edTool) && c.edTool !== 'pick' ? c.edTool : 'brush', prevTool: 'brush',
       color: /^#[0-9a-f]{6}$/i.test(c.edColor || '') ? c.edColor : COLORS[0],
       sz: cl(+c.edSize || 6, 2, 40), fs: cl(+c.edText || 28, 12, 96),
       iw: Math.max(1, Math.round(o.px.w)), ih: Math.max(1, Math.round(o.px.h)),
@@ -182,7 +185,12 @@
     E.crop = $e('div', 'edcrop', v);
     for (const h of ['tl', 't', 'tr', 'r', 'br', 'b', 'bl', 'l']) $e('i', 'ech ech-' + h, E.crop).dataset.h = h;
     $e('b', 'edgrid', E.crop);
+    E.sel = $e('div', 'edsel', v); E.selb = $e('i', 'edsb', E.sel);
+    E.selh = [...BH, 'p1', 'p2'].map(h => { const x = $e('i', 'esh esh-' + h + (h[0] === 'p' ? ' pt' : ''), E.sel); x.dataset.sh = h; return x; });
     E.cur = $e('div', 'edcur', root);
+    E.lp = $e('div', 'edlp', root); E.lpz = $e('canvas', '', E.lp); E.lpz.width = E.lpz.height = LPN * LPZ; $e('b', '', E.lp);
+    { const lr = $e('div', '', E.lp); E.lpw = $e('i', '', lr); E.lpt = $e('span', '', lr); }
+    E.lps = document.createElement('canvas'); E.lps.width = E.lps.height = LPN;
     buildOpt(root); buildBar(root);
     E.tip = $e('div', 'edtip', root); E.toast = $e('div', 'edtoast', root);
     v.addEventListener('pointerdown', down);
@@ -193,12 +201,16 @@
     v.addEventListener('pointerleave', () => { E.inView = false; ringShow(); });
     // the ghost the shot flows in
     const gh = $e('div', 'edgh', root), gi = $e('img', '', gh);
-    gi.src = o.url; gi.style.width = innerWidth + 'px'; gi.style.height = innerHeight + 'px';
+    // from the history the picture is its own file, from a capture it is a piece of the frozen screen
+    const PA = o.src ? { x: 0, y: 0, w: E.iw, h: E.ih } : o.r;
+    if (o.src) { gi.src = o.src; gi.style.width = E.iw + 'px'; gi.style.height = E.ih + 'px'; }
+    else { gi.src = o.url; gi.style.width = innerWidth + 'px'; gi.style.height = innerHeight + 'px'; }
     gh.style.visibility = 'hidden';
     const load = loadPic(o);
     load.catch(() => {});
     await fonts();
     if (!E) return;
+    if (o.src) { await Promise.race([gi.decode().catch(() => {}), new Promise(r => setTimeout(r, 1500))]); if (!E) return; }
     measure();
     E.lay = layout(E.V);
     place(E.V, E.lay);
@@ -208,7 +220,7 @@
     if (o.thumb) o.thumb.style.visibility = 'hidden';
     gh.style.visibility = '';
     RS.anim(bg, { opacity: 1 }, { duration: .3, ease: [.3, 0, .2, 1] });
-    await morph(gh, o.T, E.lay, THUMB_R, RAD, SP_OPEN, (w, h) => cover(gi, w, h, o.r));
+    await morph(gh, o.T, E.lay, THUMB_R, RAD, SP_OPEN, (w, h) => cover(gi, w, h, PA));
     await load;
     if (!E) return;
     render();
@@ -223,12 +235,12 @@
     const sx = Math.round(o.px.x), sy = Math.round(o.px.y);
     let bmp = null;
     try {
-      const res = await fetch(o.url);
+      const res = await fetch(o.src || o.url);
       if (!res.ok) throw new Error('frame ' + res.status);
       bmp = await createImageBitmap(await res.blob(), sx, sy, E.iw, E.ih);
     } catch (e) {
       RS.log('editor fetch: ' + (e && e.message || e) + ', trying the image');
-      const im = new Image(); im.crossOrigin = 'anonymous'; im.src = o.url;
+      const im = new Image(); im.crossOrigin = 'anonymous'; im.src = o.src || o.url;
       await im.decode();
       bmp = await createImageBitmap(im, sx, sy, E.iw, E.ih);
     }
@@ -295,6 +307,9 @@
   function setTool(id, instant) {
     if (!E) return;
     if (E.tx) commitText();
+    if (E.pv) commitPv();
+    if (id !== 'select') select(-1);
+    E.view.classList.remove('onmv', 'ontx');
     const was = E.tool;
     if (id === 'crop' && was !== 'crop') E.prevTool = was;
     E.tool = id;
@@ -306,15 +321,15 @@
     const left = E.tb[id].offsetLeft + 'px';
     if (instant) E.hl.style.left = left; else RS.anim(E.hl, { left }, SP_HL);
     E.view.dataset.tool = id;
-    const tx = id === 'text';
-    E.rg.min = tx ? 12 : 2; E.rg.max = tx ? 96 : 40;
-    setSize(tx ? E.fs : E.sz, true);
+    rgRange();
+    setSize(isTx() ? E.fs : E.sz, true);
     const colorsOn = id !== 'eraser' && id !== 'blur';
     if (instant) E.cg.style.opacity = colorsOn ? 1 : .3; else RS.anim(E.cg, { opacity: colorsOn ? 1 : .3 }, { duration: .18 });
     E.cg.style.pointerEvents = colorsOn ? '' : 'none';
     if (id === 'crop') cropOn(instant); else cropOff(instant);
     ringShow();
-    if (!instant && DRAW.has(id)) { E.o.cfg && (E.o.cfg.edTool = id); RS.set({ edTool: id }); }
+    if (id === 'blur') warmBlur();
+    if (!instant && DRAW.has(id) && id !== 'pick') { E.o.cfg && (E.o.cfg.edTool = id); RS.set({ edTool: id }); }
   }
   function setColor(col, live, instant) {
     if (!E) return;
@@ -326,11 +341,12 @@
     const left = d.offsetLeft + 'px';
     if (instant) E.ring.style.left = left; else RS.anim(E.ring, { left }, SP_HL);
     E.szd.style.background = col;
+    if (!instant && !E.sync && E.seli >= 0) applySel({ c: col }, live);
     if (!instant && !live) { E.o.cfg && (E.o.cfg.edColor = col); RS.set({ edColor: col }); }
   }
   function setSize(v, instant) {
     if (!E) return;
-    const tx = E.tool === 'text';
+    const tx = isTx();
     v = tx ? cl(v, 12, 96) : cl(v, 2, 40);
     if (tx) E.fs = v; else E.sz = v;
     E.rg.value = v;
@@ -340,11 +356,14 @@
     const dot = tx ? cl(v * .3, 4, 22) : cl(width(E.tool), 3, 22);
     E.szd.style.width = E.szd.style.height = dot + 'px';
     if (E.tx) { E.tx.s = v / E.lay.k; E.tx.el.style.fontSize = v + 'px'; }
+    if (!instant && !E.sync && E.seli >= 0) applySel(sizeProp(v), true);
+    if (!instant && E.tool === 'blur') warmBlur();
     ringShow();
   }
   function saveSize() {
     if (!E) return;
-    const p = E.tool === 'text' ? { edText: E.fs } : { edSize: E.sz };
+    if (E.pv) commitPv();
+    const p = isTx() ? { edText: E.fs } : { edSize: E.sz };
     if (E.o.cfg) Object.assign(E.o.cfg, p);
     RS.set(p);
   }
@@ -354,22 +373,24 @@
     const on = E.ui && !E.anim && E.inView && RING[E.tool];
     E.cur.style.display = on ? 'block' : 'none';
     if (on) { const s = Math.max(4, width(E.tool)); E.cur.style.width = E.cur.style.height = s + 'px'; E.ringS = s; ringPos(); }
+    lpShow();
   }
-  function ringMove(e) { if (!E) return; E.mx = e.clientX; E.my = e.clientY; if (E.cur.style.display === 'block') ringPos(); }
+  function ringMove(e) { if (!E) return; E.mx = e.clientX; E.my = e.clientY; if (E.cur.style.display === 'block') ringPos(); if (E.lpOn) lpFrame(); }
   function ringPos() { const s = E.ringS || 4; E.cur.style.left = (E.mx - s / 2) + 'px'; E.cur.style.top = (E.my - s / 2) + 'px'; }
 
   // ---------------- drawing
-  function textState() {
+  // what every step looks like now: later steps move, restyle, retext or remove an earlier one, so undo stays exact
+  function state() {
     const s = {};
     E.ops.forEach((op, i) => {
-      if (op.t === 'text') s[i] = { dx: 0, dy: 0, txt: null };
-      else if (op.t === 'mv' && s[op.i]) { s[op.i].dx += op.dx; s[op.i].dy += op.dy; }
-      else if (op.t === 'tx' && s[op.i]) s[op.i].txt = op.txt;
+      if (op.t === 'set') { if (s[op.i]) Object.assign(s[op.i], op.p); }
+      else s[i] = {};
     });
-    const m = E.mvLive;
-    if (m && s[m.i]) { s[m.i].dx += m.dx; s[m.i].dy += m.dy; }
+    const v = E.pv; if (v && s[v.i]) Object.assign(s[v.i], v.p);
     return s;
   }
+  const look = (op, p) => p && Object.keys(p).length ? { ...op, ...p } : op;
+  const lookAt = i => look(E.ops[i], state()[i]);
   function pathOf(c, pts) {
     c.beginPath();
     c.moveTo(pts[0][0], pts[0][1]);
@@ -413,71 +434,80 @@
     c.restore();
   }
   // text sits exactly where the input field showed it (same font, same line height)
-  function text(c, op, s, i) {
-    const txt = s && s.txt != null ? s.txt : op.txt;
-    const x = op.x + (s ? s.dx : 0), y = op.y + (s ? s.dy : 0);
+  function text(c, op, lk, i) {
+    const txt = lk.txt, x = lk.x, y = lk.y, s = lk.s;
     if (!txt) { op._box = null; return; }
-    const lines = txt.split('\n'), lh = op.s * 1.22;
+    const lines = txt.split('\n'), lh = s * 1.22;
     c.save();
-    c.font = TFONT(op.s); c.textBaseline = 'alphabetic';
-    const m = c.measureText('Hg'), A = m.fontBoundingBoxAscent || op.s * .9, D = m.fontBoundingBoxDescent || op.s * .25;
+    c.font = TFONT(s); c.textBaseline = 'alphabetic';
+    const m = c.measureText('Hg'), A = m.fontBoundingBoxAscent || s * .9, D = m.fontBoundingBoxDescent || s * .25;
     const off = (lh - (A + D)) / 2 + A;
     let w = 0;
     for (const l of lines) w = Math.max(w, c.measureText(l).width);
     op._box = { x, y, w, h: lines.length * lh };
     if (i === E.hideText) { c.restore(); return; }
-    c.fillStyle = op.c; c.shadowColor = 'rgba(0,0,0,.35)'; c.shadowBlur = op.s * .12; c.shadowOffsetY = op.s * .03;
+    c.fillStyle = lk.c; c.shadowColor = 'rgba(0,0,0,.35)'; c.shadowBlur = s * .12; c.shadowOffsetY = s * .03;
     lines.forEach((l, j) => c.fillText(l, x, y + j * lh + off));
     c.restore();
   }
   function drawOp(c, op, i, st) {
+    const lk = st && st[i] ? look(op, st[i]) : op;
+    if (lk.del) { op._box = null; return; }
     if (op.t === 'path') {
       if (op.tool === 'blur') return;
       c.save();
+      if (lk.dx || lk.dy) c.translate(lk.dx || 0, lk.dy || 0);
       if (op.tool === 'eraser') c.globalCompositeOperation = 'destination-out';
       if (op.tool === 'marker') c.globalAlpha = .38;
-      c.strokeStyle = op.tool === 'eraser' ? '#000' : op.c; c.lineWidth = op.w; c.lineCap = 'round'; c.lineJoin = 'round';
+      c.strokeStyle = op.tool === 'eraser' ? '#000' : lk.c; c.lineWidth = lk.w; c.lineCap = 'round'; c.lineJoin = 'round';
       pathOf(c, op.pts); c.stroke();
       c.restore();
-    } else if (op.t === 'shape') shape(c, op);
-    else if (op.t === 'text') text(c, op, st && st[i], i);
+    } else if (op.t === 'shape') shape(c, lk);
+    else if (op.t === 'text') text(c, op, lk, i);
   }
-  // blur: the picture under the stroke is shrunk, grown back and softened, then kept only under the stroke
-  function blurInto(src, op, out) {
-    const pad0 = op.w / 2 + 2;
-    let x1 = Infinity, y1 = Infinity, x2 = -Infinity, y2 = -Infinity;
-    for (const [x, y] of op.pts) { x1 = Math.min(x1, x); y1 = Math.min(y1, y); x2 = Math.max(x2, x); y2 = Math.max(y2, y); }
-    const f = cl(op.w / 3, 5, 26), pad = pad0 + f * 3;
-    const S = { x: Math.max(0, Math.floor(x1 - pad)), y: Math.max(0, Math.floor(y1 - pad)) };
-    S.w = Math.min(E.iw, Math.ceil(x2 + pad)) - S.x; S.h = Math.min(E.ih, Math.ceil(y2 + pad)) - S.y;
-    if (S.w < 1 || S.h < 1) return;
-    const sw = Math.max(1, Math.round(S.w / f)), sh = Math.max(1, Math.round(S.h / f));
-    const sm = E.cvS || (E.cvS = document.createElement('canvas')); sm.width = sw; sm.height = sh;
-    const s = sm.getContext('2d'); s.imageSmoothingQuality = 'high';
-    s.drawImage(src, S.x, S.y, S.w, S.h, 0, 0, sw, sh);
-    const tm = E.cvT || (E.cvT = document.createElement('canvas')); tm.width = S.w; tm.height = S.h;
-    const t = tm.getContext('2d');
-    t.filter = `blur(${(f * .5).toFixed(1)}px)`; t.imageSmoothingEnabled = true; t.imageSmoothingQuality = 'high';
-    t.drawImage(sm, 0, 0, sw, sh, -f * .5, -f * .5, S.w + f, S.h + f);
+  // blur: the whole picture is blurred once per strength and a stroke paints exactly those pixels,
+  // so the stroke looks the same while drawing and after it, nothing is rebuilt piece by piece
+  const bstr = w => Math.round(cl(w / 3, 5, 26));
+  function blurred(f) {
+    let c = E.bc.get(f);
+    if (c) { E.bc.delete(f); E.bc.set(f, c); return c; }
+    const sw = Math.max(1, Math.round(E.iw / f)), sh = Math.max(1, Math.round(E.ih / f));
+    const sm = document.createElement('canvas'); sm.width = sw; sm.height = sh;
+    const s = sm.getContext('2d'); s.imageSmoothingEnabled = true; s.imageSmoothingQuality = 'high';
+    s.drawImage(E.src, 0, 0, sw, sh);
+    c = document.createElement('canvas'); c.width = E.iw; c.height = E.ih;
+    const t = c.getContext('2d'); t.imageSmoothingEnabled = true; t.imageSmoothingQuality = 'high';
+    t.drawImage(sm, 0, 0, E.iw, E.ih); // solid edges under the soft layer
+    t.filter = `blur(${(f * .5).toFixed(1)}px)`;
+    t.drawImage(sm, 0, 0, sw, sh, -f * .5, -f * .5, E.iw + f, E.ih + f);
     t.filter = 'none';
-    const mk = E.cvM || (E.cvM = document.createElement('canvas')); mk.width = S.w; mk.height = S.h;
-    const m = mk.getContext('2d');
-    m.translate(-S.x, -S.y); m.strokeStyle = '#000'; m.lineWidth = op.w; m.lineCap = 'round'; m.lineJoin = 'round';
-    pathOf(m, op.pts); m.stroke();
-    t.globalCompositeOperation = 'destination-in'; t.drawImage(mk, 0, 0); t.globalCompositeOperation = 'source-over';
-    out.drawImage(tm, S.x, S.y);
+    E.bc.set(f, c);
+    while (E.bc.size > 2) E.bc.delete(E.bc.keys().next().value);
+    return c;
+  }
+  function blurStroke(c, op) {
+    if (!E.src) return;
+    c.save();
+    c.strokeStyle = c.createPattern(blurred(bstr(op.w)), 'no-repeat');
+    c.lineWidth = op.w; c.lineCap = 'round'; c.lineJoin = 'round';
+    pathOf(c, op.pts); c.stroke();
+    c.restore();
+  }
+  function warmBlur() {
+    clearTimeout(E.bwT);
+    E.bwT = setTimeout(() => { if (E && E.src && E.tool === 'blur' && !E.drag && E.lay) blurred(bstr(width('blur') / E.lay.k)); }, 60);
   }
   function renderBase() {
     const b = E.base.getContext('2d');
     b.clearRect(0, 0, E.iw, E.ih);
     b.drawImage(E.src, 0, 0);
-    for (const op of E.ops) if (op.t === 'path' && op.tool === 'blur') blurInto(E.base, op, b);
+    for (const op of E.ops) if (op.t === 'path' && op.tool === 'blur') blurStroke(b, op);
   }
   function renderAnn(extra) {
-    const a = E.ann.getContext('2d'), st = textState();
+    const a = E.ann.getContext('2d'), st = state();
     a.clearRect(0, 0, E.iw, E.ih);
     E.ops.forEach((op, i) => drawOp(a, op, i, st));
-    if (extra) drawOp(a, extra, -1, st);
+    if (extra) drawOp(a, extra, -1, null);
   }
   function render() { if (!E || !E.src) return; renderBase(); renderAnn(); }
   function clearLive() { E.live.getContext('2d').clearRect(0, 0, E.iw, E.ih); }
@@ -488,10 +518,10 @@
     const c = E.live.getContext('2d');
     if (d.k === 'path') {
       if (d.op.tool === 'eraser') return renderAnn(d.op);
-      if (d.op.tool === 'blur') return blurInto(E.base, d.op, c);
+      if (d.op.tool === 'blur') return blurStroke(c, d.op);
       drawOp(c, d.op);
     } else if (d.k === 'shape') { if (d.moved) drawOp(c, d.op); }
-    else if (d.k === 'mvtext') renderAnn();
+    else if (d.k === 'mvtext' || d.k === 'selmv' || d.k === 'selh') { renderAnn(); placeSel(); }
   }
 
   // ---------------- steps & undo
@@ -509,6 +539,7 @@
   function history(fn) {
     if (!E || !E.ui || E.anim || E.busy) return;
     if (E.tx) commitText();
+    E.pv = null; select(-1);
     if (!fn()) return;
     E.ver++; updUndo();
     const V0 = E.V; E.V = viewOf();
@@ -538,6 +569,147 @@
     });
   }
 
+  // ---------------- picking and changing what is already drawn
+  const canSel = op => !!op && (op.t === 'shape' || op.t === 'text' || (op.t === 'path' && (op.tool === 'brush' || op.tool === 'marker')));
+  const isLn = op => op.t === 'shape' && (op.tool === 'line' || op.tool === 'arrow');
+  function bounds(op, lk) {
+    if (op.t === 'text') return op._box;
+    if (op.t === 'shape') { const p = lk.w / 2; return { x: Math.min(lk.a[0], lk.b[0]) - p, y: Math.min(lk.a[1], lk.b[1]) - p, w: Math.abs(lk.b[0] - lk.a[0]) + 2 * p, h: Math.abs(lk.b[1] - lk.a[1]) + 2 * p }; }
+    let x1 = Infinity, y1 = Infinity, x2 = -Infinity, y2 = -Infinity;
+    for (const [x, y] of op.pts) { if (x < x1) x1 = x; if (x > x2) x2 = x; if (y < y1) y1 = y; if (y > y2) y2 = y; }
+    const p = lk.w / 2, dx = lk.dx || 0, dy = lk.dy || 0;
+    return { x: x1 - p + dx, y: y1 - p + dy, w: x2 - x1 + 2 * p, h: y2 - y1 + 2 * p };
+  }
+  function segD(p, a, b) {
+    const vx = b[0] - a[0], vy = b[1] - a[1], l = vx * vx + vy * vy;
+    const t = l ? cl(((p[0] - a[0]) * vx + (p[1] - a[1]) * vy) / l, 0, 1) : 0;
+    return Math.hypot(p[0] - a[0] - vx * t, p[1] - a[1] - vy * t);
+  }
+  function hitOp(op, lk, p, tol) {
+    if (op.t === 'text') { const b = op._box; return !!b && p[0] >= b.x - tol && p[0] <= b.x + b.w + tol && p[1] >= b.y - tol && p[1] <= b.y + b.h + tol; }
+    const r = lk.w / 2 + tol;
+    if (op.t === 'path') {
+      const q = [p[0] - (lk.dx || 0), p[1] - (lk.dy || 0)], P = op.pts;
+      if (P.length === 1) return Math.hypot(q[0] - P[0][0], q[1] - P[0][1]) <= r;
+      for (let j = 1; j < P.length; j++) if (segD(q, P[j - 1], P[j]) <= r) return true;
+      return false;
+    }
+    if (isLn(op)) return segD(p, lk.a, lk.b) <= r;
+    const x1 = Math.min(lk.a[0], lk.b[0]), x2 = Math.max(lk.a[0], lk.b[0]), y1 = Math.min(lk.a[1], lk.b[1]), y2 = Math.max(lk.a[1], lk.b[1]);
+    if (op.tool === 'rect') {
+      const out = p[0] >= x1 - r && p[0] <= x2 + r && p[1] >= y1 - r && p[1] <= y2 + r;
+      const inn = p[0] > x1 + r && p[0] < x2 - r && p[1] > y1 + r && p[1] < y2 - r;
+      return out && !inn;
+    }
+    const rx = Math.max(.5, (x2 - x1) / 2), ry = Math.max(.5, (y2 - y1) / 2), cx = (x1 + x2) / 2, cy = (y1 + y2) / 2;
+    return Math.abs(Math.hypot((p[0] - cx) / rx, (p[1] - cy) / ry) - 1) * Math.min(rx, ry) <= r;
+  }
+  // the top-most thing under the pointer; shape tools only pick shapes
+  function pickAt(p, onlyShapes) {
+    const st = state(), tol = 6 / E.lay.k;
+    for (let i = E.ops.length - 1; i >= 0; i--) {
+      const op = E.ops[i];
+      if (!canSel(op) || (onlyShapes && op.t !== 'shape')) continue;
+      const lk = look(op, st[i]);
+      if (!lk.del && hitOp(op, lk, p, tol)) return i;
+    }
+    return -1;
+  }
+  function inSel(p) {
+    if (E.seli < 0) return false;
+    const op = E.ops[E.seli], lk = lookAt(E.seli), t = 6 / E.lay.k;
+    if (lk.del) return false;
+    if (isLn(op)) return hitOp(op, lk, p, t * 2);
+    const b = bounds(op, lk);
+    return !!b && p[0] >= b.x - t && p[0] <= b.x + b.w + t && p[1] >= b.y - t && p[1] <= b.y + b.h + t;
+  }
+  const isTx = () => E.seli >= 0 ? E.ops[E.seli].t === 'text' : E.tool === 'text';
+  function rgRange() { const tx = isTx(); E.rg.min = tx ? 12 : 2; E.rg.max = tx ? 96 : 40; }
+  function sizeProp(v) {
+    const op = E.ops[E.seli], k = E.lay.k;
+    return op.t === 'text' ? { s: v / k } : { w: (op.tool === 'marker' ? v * 2.6 : v) / k };
+  }
+  function select(i) {
+    if (!E) return;
+    if (i >= 0 && !canSel(E.ops[i])) i = -1;
+    if (i === E.seli) { if (i >= 0) placeSel(); return; }
+    if (E.pv) commitPv();
+    E.seli = i;
+    if (i < 0) {
+      E.selOn = false;
+      Promise.resolve(RS.anim(E.sel, { opacity: 0 }, { duration: .12 })).then(() => { if (E && E.seli < 0) E.sel.style.display = 'none'; });
+      rgRange(); setSize(isTx() ? E.fs : E.sz, true);
+      return;
+    }
+    placeSel();
+    if (!E.selOn) { E.selOn = true; E.sel.style.display = 'block'; RS.anim(E.sel, { opacity: [0, 1] }, { duration: .14 }); }
+    // the panel shows the colour and the size of the picked thing
+    const op = E.ops[i], lk = lookAt(i), k = E.lay.k;
+    E.sync = true;
+    if (lk.c) setColor(lk.c, true);
+    rgRange();
+    if (op.t === 'text') { E.fs = cl(Math.round(lk.s * k), 12, 96); setSize(E.fs, true); }
+    else { E.sz = cl(Math.round(op.tool === 'marker' ? lk.w * k / 2.6 : lk.w * k), 2, 40); setSize(E.sz, true); }
+    E.sync = false;
+  }
+  function placeSel() {
+    const i = E.seli; if (i < 0) return;
+    const op = E.ops[i], lk = lookAt(i), k = E.lay.k, vx = x => (x - E.V.x) * k, vy = y => (y - E.V.y) * k;
+    const ln = isLn(op);
+    let b = null;
+    if (!ln && !lk.del) {
+      const p = 5 / k;
+      if (op.t === 'shape') { const q = lk.w / 2 + p; b = { x: Math.min(lk.a[0], lk.b[0]) - q, y: Math.min(lk.a[1], lk.b[1]) - q, w: Math.abs(lk.b[0] - lk.a[0]) + 2 * q, h: Math.abs(lk.b[1] - lk.a[1]) + 2 * q }; }
+      else { const o = bounds(op, lk); if (o) b = { x: o.x - p, y: o.y - p, w: o.w + 2 * p, h: o.h + 2 * p }; }
+    }
+    const S = E.selb.style;
+    S.display = b ? 'block' : 'none';
+    if (b) { S.left = vx(b.x) + 'px'; S.top = vy(b.y) + 'px'; S.width = b.w * k + 'px'; S.height = b.h * k + 'px'; }
+    const hs = !!b && op.t === 'shape';
+    for (const h of E.selh) {
+      const n = h.dataset.sh; let x = null, y = null;
+      if (hs && n[0] !== 'p') { x = b.x + (n.includes('l') ? 0 : n.includes('r') ? b.w : b.w / 2); y = b.y + (n.includes('t') ? 0 : n.includes('b') ? b.h : b.h / 2); }
+      else if (ln && !lk.del && n[0] === 'p') [x, y] = n === 'p1' ? lk.a : lk.b;
+      h.style.display = x == null ? 'none' : 'block';
+      if (x != null) { h.style.left = vx(x) + 'px'; h.style.top = vy(y) + 'px'; }
+    }
+  }
+  function applySel(p, live) {
+    const i = E.seli; if (i < 0) return;
+    if (live) { E.pv = { i, p: { ...(E.pv && E.pv.i === i ? E.pv.p : {}), ...p } }; renderAnn(); placeSel(); return; }
+    E.pv = null; push({ t: 'set', i, p }); renderAnn(); placeSel();
+  }
+  function commitPv() {
+    const v = E.pv; if (!v) return;
+    E.pv = null; push({ t: 'set', i: v.i, p: v.p }); renderAnn();
+    if (E.seli >= 0) placeSel();
+  }
+  function delSel() {
+    const i = E.seli; if (i < 0) return;
+    if (E.pv) commitPv();
+    push({ t: 'set', i, p: { del: true } });
+    select(-1); renderAnn();
+  }
+  function moved(op, lk, dx, dy) {
+    if (op.t === 'shape') return { a: [lk.a[0] + dx, lk.a[1] + dy], b: [lk.b[0] + dx, lk.b[1] + dy] };
+    if (op.t === 'text') return { x: lk.x + dx, y: lk.y + dy };
+    return { dx: (lk.dx || 0) + dx, dy: (lk.dy || 0) + dy };
+  }
+  function resize(d, dx, dy, shift) {
+    const lk = d.L0, h = d.h;
+    if (h === 'p1' || h === 'p2') {
+      const me = h === 'p1' ? lk.a : lk.b, o = { tool: E.ops[d.i].tool, a: h === 'p1' ? lk.b : lk.a, b: [me[0] + dx, me[1] + dy] };
+      if (shift) constrain(o);
+      return h === 'p1' ? { a: o.b } : { b: o.b };
+    }
+    let x1 = Math.min(lk.a[0], lk.b[0]), x2 = Math.max(lk.a[0], lk.b[0]), y1 = Math.min(lk.a[1], lk.b[1]), y2 = Math.max(lk.a[1], lk.b[1]);
+    if (h.includes('l')) x1 += dx;
+    if (h.includes('r')) x2 += dx;
+    if (h.includes('t')) y1 += dy;
+    if (h.includes('b')) y2 += dy;
+    return { a: [x1, y1], b: [x2, y2] };
+  }
+
   // ---------------- pointer
   function down(e) {
     if (!E || !E.ui || E.anim || E.busy || e.button !== 0) return;
@@ -545,13 +717,24 @@
     const p = toImg(e), t = E.tool;
     try { E.view.setPointerCapture(e.pointerId); } catch (err) {}
     if (t === 'crop') return cropDown(e, p);
+    if (t === 'pick') return pickColor();
+    const sh = e.target && e.target.dataset ? e.target.dataset.sh : null;
+    if (sh && E.seli >= 0) { E.drag = { k: 'selh', h: sh, i: E.seli, p0: p, L0: lookAt(E.seli), moved: false }; return; }
+    if (t === 'select' || SHAPES.has(t)) {
+      const i = t === 'select' && inSel(p) ? E.seli : pickAt(p, t !== 'select');
+      if (i >= 0) { select(i); E.drag = { k: 'selmv', i, p0: p, L0: lookAt(i), moved: false }; return; }
+      select(-1);
+      if (t === 'select') return;
+    }
     if (t === 'text') {
       const i = hitText(p);
-      E.drag = i >= 0 ? { k: 'mvtext', i, p0: p, moved: false } : { k: 'newtext', p0: p };
+      E.drag = i >= 0 ? { k: 'mvtext', i, p0: p, L0: lookAt(i), moved: false } : { k: 'newtext', p0: p };
       return;
     }
     const w = width(t) / E.lay.k;
     if (RING[t]) {
+      // a blur stroke is drawn under the annotations right away, like it will be after release
+      if (t === 'blur') { E.live.style.zIndex = '1'; E.ann.style.zIndex = '2'; }
       E.drag = { k: 'path', op: { t: 'path', tool: t, pts: [p], w, c: E.color } };
       liveFrame();
       return;
@@ -562,7 +745,13 @@
     if (!E) return;
     const d = E.drag;
     if (!d) {
-      if (E.tool === 'text' && E.ui) E.view.classList.toggle('ontx', hitText(toImg(e)) >= 0);
+      if (!E.ui || E.anim) return;
+      const t = E.tool;
+      if (t === 'text') E.view.classList.toggle('ontx', hitText(toImg(e)) >= 0);
+      else if (t === 'select' || SHAPES.has(t)) {
+        const p = toImg(e), on = (t === 'select' && inSel(p)) || pickAt(p, t !== 'select') >= 0;
+        E.view.classList.toggle('onmv', on);
+      }
       return;
     }
     if (d.k === 'path') {
@@ -580,10 +769,11 @@
       d.op.b = p; if (e.shiftKey) constrain(d.op);
       return liveFrame();
     }
-    if (d.k === 'mvtext') {
+    if (d.k === 'mvtext' || d.k === 'selmv' || d.k === 'selh') {
       const dx = p[0] - d.p0[0], dy = p[1] - d.p0[1];
       if (!d.moved && Math.hypot(dx, dy) * E.lay.k < 3) return;
-      d.moved = true; E.mvLive = { i: d.i, dx, dy };
+      d.moved = true;
+      E.pv = { i: d.i, p: d.k === 'selh' ? resize(d, dx, dy, e.shiftKey) : moved(E.ops[d.i], d.L0, dx, dy) };
       return liveFrame();
     }
     if (d.k === 'crop') return cropMove(p);
@@ -594,16 +784,17 @@
     E.drag = null;
     if (E.raf) { cancelAnimationFrame(E.raf); E.raf = 0; }
     if (d.k === 'path') {
-      push(d.op); clearLive();
-      if (d.op.tool === 'blur') blurInto(E.base, d.op, E.base.getContext('2d')); else renderAnn();
+      push(d.op);
+      if (d.op.tool === 'blur') { blurStroke(E.base.getContext('2d'), d.op); clearLive(); E.live.style.zIndex = ''; E.ann.style.zIndex = ''; }
+      else { clearLive(); renderAnn(); }
     } else if (d.k === 'shape') {
       clearLive();
-      if (d.moved) { push(d.op); renderAnn(); }
-    } else if (d.k === 'mvtext') {
-      const m = E.mvLive; E.mvLive = null;
-      if (d.moved && m) push({ t: 'mv', i: m.i, dx: m.dx, dy: m.dy });
-      renderAnn();
-      if (!d.moved) openText(null, d.i);
+      if (d.moved) { push(d.op); renderAnn(); select(E.ops.length - 1); }
+    } else if (d.k === 'mvtext' || d.k === 'selmv' || d.k === 'selh') {
+      const v = E.pv; E.pv = null;
+      if (d.moved && v) push({ t: 'set', i: v.i, p: v.p });
+      renderAnn(); placeSel();
+      if (d.k === 'mvtext' && !d.moved) openText(null, d.i);
     } else if (d.k === 'newtext') openText(d.p0);
   }
   function constrain(op) {
@@ -629,8 +820,8 @@
     const k = E.lay.k;
     let x, y, s, c, txt = '';
     if (i != null) {
-      const op = E.ops[i], st = textState()[i];
-      x = op.x + st.dx; y = op.y + st.dy; s = op.s; c = op.c; txt = st.txt != null ? st.txt : op.txt;
+      const lk = lookAt(i);
+      x = lk.x; y = lk.y; s = lk.s; c = lk.c; txt = lk.txt || '';
       E.hideText = i; renderAnn();
     } else {
       s = E.fs / k; c = E.color; x = p[0]; y = p[1] - s * .61;
@@ -654,15 +845,60 @@
     t.el.remove();
     if (!cancel) {
       if (t.i != null) {
-        const st = textState()[t.i], cur = st && st.txt != null ? st.txt : E.ops[t.i].txt, op = E.ops[t.i];
-        if (txt !== cur || t.c !== op.c || Math.abs(t.s - op.s) > .01) {
-          // a changed colour or size makes it a new text in place of the old one
-          if (t.c !== op.c || Math.abs(t.s - op.s) > .01) { push({ t: 'tx', i: t.i, txt: '' }); if (txt.trim()) push({ t: 'text', x: t.x, y: t.y, s: t.s, c: t.c, txt }); }
-          else push({ t: 'tx', i: t.i, txt: txt.trim() ? txt : '' });
+        // an edited text stays the same object: only what changed is written down
+        const lk = lookAt(t.i), p = {};
+        if (!txt.trim()) p.del = true;
+        else {
+          if (txt !== lk.txt) p.txt = txt;
+          if (t.c !== lk.c) p.c = t.c;
+          if (Math.abs(t.s - lk.s) > .01) p.s = t.s;
         }
+        if (Object.keys(p).length) push({ t: 'set', i: t.i, p });
       } else if (txt.trim()) push({ t: 'text', x: t.x, y: t.y, s: t.s, c: t.c, txt });
     }
     renderAnn();
+  }
+
+  // ---------------- eyedropper
+  function lpShow() {
+    if (!E || !E.lp) return;
+    const on = !!(E.ui && !E.anim && E.inView && E.tool === 'pick');
+    if (on === !!E.lpOn) return;
+    E.lpOn = on;
+    if (on) { lpUpd(); E.lp.style.display = 'block'; RS.anim(E.lp, { opacity: [0, 1] }, { duration: .12 }); }
+    else Promise.resolve(RS.anim(E.lp, { opacity: 0 }, { duration: .1 })).then(() => { if (E && !E.lpOn) E.lp.style.display = 'none'; });
+  }
+  function lpFrame() {
+    if (E.lpRaf) return;
+    E.lpRaf = requestAnimationFrame(() => { if (!E) return; E.lpRaf = 0; if (E.lpOn) lpUpd(); });
+  }
+  function lpUpd() {
+    if (E.mx == null || !E.lay) return;
+    const b = E.view.getBoundingClientRect(), k = E.lay.k, h = LPN >> 1, V = E.V;
+    const x = Math.floor(cl(V.x + (E.mx - b.left) / k, V.x, V.x + V.w - 1)), y = Math.floor(cl(V.y + (E.my - b.top) / k, V.y, V.y + V.h - 1));
+    const c = E.lpc || (E.lpc = E.lps.getContext('2d', { willReadFrequently: true }));
+    c.clearRect(0, 0, LPN, LPN); c.fillStyle = '#111'; c.fillRect(0, 0, LPN, LPN);
+    c.drawImage(E.base, x - h, y - h, LPN, LPN, 0, 0, LPN, LPN);
+    c.drawImage(E.ann, x - h, y - h, LPN, LPN, 0, 0, LPN, LPN);
+    const d = c.getImageData(h, h, 1, 1).data;
+    const hex = '#' + [d[0], d[1], d[2]].map(v => v.toString(16).padStart(2, '0')).join('');
+    const z = E.lpz.getContext('2d'); z.imageSmoothingEnabled = false;
+    z.clearRect(0, 0, LPN * LPZ, LPN * LPZ); z.drawImage(E.lps, 0, 0, LPN * LPZ, LPN * LPZ);
+    E.lpHex = hex; E.lpt.textContent = hex.toUpperCase(); E.lpw.style.background = hex;
+    const W = 122, H = 154, m = E.m;
+    let lx = E.mx + 22, ly = E.my + 22;
+    if (lx + W > m.x + m.w - 8) lx = E.mx - 22 - W;
+    if (ly + H > m.y + m.h - 8) ly = E.my - 22 - H;
+    E.lp.style.left = lx + 'px'; E.lp.style.top = ly + 'px';
+  }
+  function pickColor() {
+    lpUpd();
+    const hex = E.lpHex; if (!hex) return;
+    const H = hex.toUpperCase();
+    setColor(hex);
+    Promise.resolve(RS.invoke('copy_text', { text: H })).then(
+      ok => toast(ok === false ? 'Не удалось скопировать цвет' : `Цвет ${H} скопирован`, ok !== false),
+      () => toast('Не удалось скопировать цвет', false));
   }
 
   // ---------------- crop
@@ -751,9 +987,10 @@
     if (ctrl || e.altKey || E.anim) return;
     if (c === 'BracketLeft' || c === 'BracketRight') {
       e.preventDefault();
-      const v = (E.tool === 'text' ? E.fs : E.sz) + (c === 'BracketLeft' ? -1 : 1) * (E.tool === 'text' ? 4 : 2);
+      const v = (isTx() ? E.fs : E.sz) + (c === 'BracketLeft' ? -1 : 1) * (isTx() ? 4 : 2);
       setSize(v); saveSize(); return;
     }
+    if ((k === 'Delete' || k === 'Backspace') && E.seli >= 0) { e.preventDefault(); return delSel(); }
     const t = TOOLS.find(t => 'Key' + t.k === c);
     if (t) { e.preventDefault(); setTool(t.id); }
   }, true);
@@ -800,6 +1037,8 @@
     if (E.anim) { E.pend = why; return; }
     if (E.tx) commitText();
     if (E.drag) return;
+    if (E.pv) commitPv();
+    select(-1);
     const edited = E.ops.length > 0;
     // edited: the changed picture goes to the clipboard straight away
     if (edited && E.copied !== E.ver && !(await put('copy'))) return;
@@ -850,7 +1089,7 @@
     if (!E) return RS.log('test_ed: editor is not open');
     const wait = ms => new Promise(r => setTimeout(r, ms));
     const b = E.view.getBoundingClientRect();
-    const fire = (type, x, y, extra) => E.view.dispatchEvent(new PointerEvent(type, { bubbles: true, pointerId: 7, button: 0, buttons: type === 'pointerup' ? 0 : 1, clientX: b.left + x * b.width, clientY: b.top + y * b.height, ...extra }));
+    const fire = (type, x, y, extra, el) => (el || E.view).dispatchEvent(new PointerEvent(type, { bubbles: true, pointerId: 7, button: 0, buttons: type === 'pointerup' ? 0 : 1, clientX: b.left + x * b.width, clientY: b.top + y * b.height, ...extra }));
     const drag = async (pts, ms) => {
       fire('pointerdown', pts[0][0], pts[0][1]);
       for (let i = 1; i < pts.length; i++) { fire('pointermove', pts[i][0], pts[i][1]); await wait(ms || 12); }
@@ -869,6 +1108,27 @@
       if (E.tx) { E.tx.el.textContent = 'Snap'; commitText(); }
       setTool('brush');
       RS.log(`test_ed draw: ${E.ops.length} steps`);
+    } else if (cmd === 'sel') {
+      setTool('select'); await wait(250);
+      const r = E.ops.findIndex(op => op.t === 'shape' && op.tool === 'rect');
+      if (r < 0) { RS.log('test_ed sel: no rect'); return; }
+      const l0 = lookAt(r), fx = x => (x - E.V.x) / E.V.w, fy = y => (y - E.V.y) / E.V.h;
+      const x0 = fx(Math.min(l0.a[0], l0.b[0])), y0 = fy((l0.a[1] + l0.b[1]) / 2);
+      await drag([[x0, y0], [x0 - .02, y0 + .02], [x0 - .05, y0 + .06]]);
+      const picked = E.seli === r;
+      const h = E.selh.find(q => q.dataset.sh === 'br'), hb = h.getBoundingClientRect();
+      const hx = (hb.left + hb.width / 2 - b.left) / b.width, hy = (hb.top + hb.height / 2 - b.top) / b.height;
+      fire('pointerdown', hx, hy, {}, h);
+      for (let i = 1; i <= 6; i++) { fire('pointermove', hx + .01 * i, hy + .008 * i); await wait(16); }
+      fire('pointerup', hx + .06, hy + .048); await wait(80);
+      setColor(COLORS[5]); await wait(250);
+      const l1 = lookAt(r);
+      RS.log(`test_ed sel: picked ${picked}, sel ${E.seli === r}, moved ${Math.round(Math.min(l1.a[0], l1.b[0]) - Math.min(l0.a[0], l0.b[0]))}, grown ${Math.round(Math.abs(l1.b[0] - l1.a[0]) - Math.abs(l0.b[0] - l0.a[0]))}, color ${l1.c}, ${E.ops.length} steps`);
+    } else if (cmd === 'pick') {
+      setTool('pick'); await wait(200);
+      fire('pointerenter', .3, .3); fire('pointermove', .3, .3); E.inView = true; ringShow(); await wait(250);
+      fire('pointerdown', .3, .3); fire('pointerup', .3, .3); await wait(200);
+      RS.log(`test_ed pick: ${E.lpHex} color ${E.color} loupe ${!!E.lpOn}`);
     } else if (cmd === 'crop') {
       setTool('crop'); await wait(300);
       E.cr = { x: E.iw * .08, y: E.ih * .1, w: E.iw * .84, h: E.ih * .62 }; placeCrop(); await wait(300);

@@ -41,6 +41,7 @@
     st.cfg(c);
     a0 = null; r = null; drag = null; hov = null; state = 'idle';
     document.body.className = '';
+    if (d.mode === 'edit') return startEdit(d);
     mx = (d.cur ? d.cur[0] : W * dpr / 2) / dpr; my = (d.cur ? d.cur[1] : H * dpr / 2) / dpr;
     const full = d.mode === 'full';
     // the dim is ready before the window shows and plays once it is really on screen
@@ -165,6 +166,25 @@
       const sm = R.inner && R.inner.querySelector('.ct small'); if (sm) sm.textContent = `${res.w} × ${res.h}`;
     }
     armCap();
+  }
+
+  // the editor opened from the history: the shot flows out of its card in the settings window
+  async function startEdit(d) {
+    state = 'editor'; busy = false;
+    st.shadeOff();
+    root.classList.add('ready');
+    const ms = monsCss(), m = ms[0] || { x: 0, y: 0, w: innerWidth, h: innerHeight };
+    const T = d.from ? { x: d.from[0] / dpr, y: d.from[1] / dpr, w: Math.max(8, d.from[2] / dpr), h: Math.max(8, d.from[3] / dpr) }
+      : { x: m.x + m.w / 2 - 60, y: m.y + m.h / 2 - 40, w: 120, h: 80 };
+    const src = 'http://snap.localhost/hist/' + d.hist + '.png';
+    try { await RS.invoke('ovl_ready', { n: d.n }); } catch (e) {}
+    window.focus();
+    let res = null;
+    try { res = await ED.open({ url: st.url, src, r: T, px: { x: 0, y: 0, w: d.hw, h: d.hh }, T, mons: ms, cfg: C(), dpr, thumb: null }); }
+    catch (e) { RS.log('history editor ' + e); }
+    if (state !== 'editor') return;
+    RS.log('history editor closed ' + (res && res.changed ? 'changed' : 'same'));
+    close();
   }
 
   // ---------------- the round menu

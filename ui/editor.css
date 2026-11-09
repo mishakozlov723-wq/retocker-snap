@@ -63,3 +63,20 @@
 .st .ghost.edok:hover .edp{opacity:1}
 .st .ghost.edok .edp svg{width:18px;height:18px;fill:currentColor}
 .st .ghost canvas.edth{position:absolute;left:0;top:0;max-width:none;transform-origin:0 0}
+.ed .edsel{position:absolute;inset:0;pointer-events:none;display:none;opacity:0;z-index:3}
+.ed .edsb{position:absolute;box-sizing:border-box;border:1.5px solid #fff;border-radius:6px;box-shadow:0 0 0 1px rgba(0,0,0,.28),0 6px 18px rgba(0,0,0,.25)}
+.ed .esh{position:absolute;width:12px;height:12px;margin:-6px 0 0 -6px;background:#fff;border-radius:4px;box-shadow:0 0 0 1px rgba(0,0,0,.3),0 2px 6px rgba(0,0,0,.3);pointer-events:auto;transition:transform .12s}
+.ed .esh:hover{transform:scale(1.18)}
+.ed .esh.pt{width:14px;height:14px;margin:-7px 0 0 -7px;border-radius:50%;cursor:grab}
+.ed .esh-tl,.ed .esh-br{cursor:nwse-resize}
+.ed .esh-tr,.ed .esh-bl{cursor:nesw-resize}
+.ed .esh-t,.ed .esh-b{cursor:ns-resize}
+.ed .esh-l,.ed .esh-r{cursor:ew-resize}
+.ed .edv[data-tool=select]{cursor:default}
+.ed .edv[data-tool=pick]{cursor:crosshair}
+.ed .edv.onmv{cursor:move}
+.ed .edlp{position:absolute;left:0;top:0;width:122px;padding:6px;box-sizing:border-box;border-radius:14px;background:rgba(26,26,26,.96);box-shadow:0 0 0 1px rgba(255,255,255,.08),0 12px 32px rgba(0,0,0,.45);display:none;opacity:0;z-index:40;pointer-events:none}
+.ed .edlp canvas{display:block;width:110px;height:110px;border-radius:9px;image-rendering:pixelated}
+.ed .edlp b{position:absolute;left:56px;top:56px;width:10px;height:10px;box-sizing:border-box;border:1.5px solid #fff;box-shadow:0 0 0 1px rgba(0,0,0,.5)}
+.ed .edlp div{display:flex;align-items:center;gap:8px;height:26px;padding:4px 4px 0;font:700 12px Manrope,sans-serif;color:#fff;font-variant-numeric:tabular-nums}
+.ed .edlp i{width:14px;height:14px;border-radius:5px;box-shadow:inset 0 0 0 1px rgba(255,255,255,.25)}

@@ -46,7 +46,7 @@
     "toolbar": "<b>Панель</b> — кнопки под областью. <b>Капсула</b> — выделение перетекает в аккуратную плашку: снимок уже скопирован, рядом кнопки «Сохранить» и «Текст». Работает и для всего экрана. <b>Круглое меню</b> — рамка сворачивается в круг, вокруг кнопки. <b>Сразу действие</b> — без кнопок.",
     "capAct": "Что сделать сразу, пока выделение перетекает в капсулу. Остальное — кнопками в самой капсуле.",
     "capPos": "<b>На месте снимка</b> — капсула собирается там, где была рамка. <b>Внизу</b> и <b>вверху</b> — снимок перетекает к краю того монитора, где выделял.",
-    "capSec": "Через сколько секунд капсула спрячется ��ама. Пока мышка на ней — не спрячется. 0 — висит, пока не кликнешь мимо или не нажмёшь Esc.",
+    "capSec": "Через сколько секунд капсула спрячется сама. Пока мышка на ней — не спрячется. 0 — висит, пока не кликнешь мимо или не нажмёшь Esc.",
     "instantAction": "Что сделать со снимком, когда отпускаешь мышь.",
     "barStyle": "Как выглядит панель с кнопками под выделением.",
     "barLabels": "Писать названия рядом с иконками на панели.",
@@ -397,7 +397,7 @@
     const src = SNAP + 'hist/' + encodeURIComponent(it.id) + '.jpg';
     return `<div class="hi" data-id="${esc(it.id)}" style="background-image:url('${src}')">
       ${it.text ? `<span class="tg">${ic('text-t')}текст</span>` : ''}
-      <div class="ops"><button data-o="copy" title="Копировать">${ic('copy')}</button><button data-o="text" title="Текст">${ic('text-t')}</button>${small ? '' : `<button data-o="save" title="Сохранить">${ic('floppy-disk')}</button><button data-o="del" class="del" title="Удалить">${ic('trash')}</button>`}</div>
+      <div class="ops"><button data-o="copy" title="Копировать">${ic('copy')}</button><button data-o="edit" title="Редактировать">${ic('pencil-simple')}</button><button data-o="text" title="Текст">${ic('text-t')}</button>${small ? '' : `<button data-o="save" title="Сохранить">${ic('floppy-disk')}</button><button data-o="del" class="del" title="Удалить">${ic('trash')}</button>`}</div>
       <div class="meta"><span>${when(it.t)}</span><span>${it.w}×${it.h}</span></div></div>`;
   }
   async function loadHist() {
@@ -414,6 +414,7 @@
     try {
       if (!o) return invoke('hist_open', { id });
       const a = o.dataset.o;
+      if (a === 'edit') { const im = h.querySelector('img'), b = (im || h).getBoundingClientRect(); await invoke('hist_edit', { id, r: { x: b.left, y: b.top, w: b.width, h: b.height } }); }
       if (a === 'copy') { await invoke('hist_copy', { id }); toast('Картинка скопирована'); }
       if (a === 'text') { toast('Распознаю…'); const t = await invoke('hist_text', { id, ai: false }); toast(t && t.trim() ? 'Текст скопирован' : 'Текст не найден'); }
       if (a === 'save') { const p = await invoke('hist_save', { id }); toast('Сохранено: ' + String(p).split(/[\\/]/).pop()); }

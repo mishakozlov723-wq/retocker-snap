@@ -130,6 +130,12 @@ Shot "41-editor"
 Start-Process $exe -ArgumentList '--test-ed', 'draw' | Out-Null
 Start-Sleep -Milliseconds 3200
 Shot "42-editor-draw"
+Start-Process $exe -ArgumentList '--test-ed', 'sel' | Out-Null
+Start-Sleep -Milliseconds 1800
+Shot "42b-editor-select"
+Start-Process $exe -ArgumentList '--test-ed', 'pick' | Out-Null
+Start-Sleep -Milliseconds 1400
+Shot "42c-editor-pick"
 Start-Process $exe -ArgumentList '--test-ed', 'crop' | Out-Null
 Start-Sleep -Milliseconds 2200
 Shot "43-editor-crop"

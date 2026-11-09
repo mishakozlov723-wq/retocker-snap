@@ -105,6 +105,9 @@ for ($k = 0; $k -lt 14; $k++) { Shot ("39f-{0:D2}" -f $k) }
 Log "capsule burst: 14 frames in $([math]::Round(((Get-Date) - $t0).TotalMilliseconds)) ms"
 Start-Sleep -Milliseconds 400
 Shot "39-capsule"
+[W]::SetCursorPos(5, 5) | Out-Null; Start-Sleep -Milliseconds 1200
+Shot "39c-capsule-mouse-away"
+Log "capsule with the mouse away: overlay visible $(Vis 'Retocker Snap — выделение')"
 Cpu 'capsule up' 2
 Log "capsule: card visible $(Vis 'Retocker Snap — снимок') (should be False)"
 Log "capsule: clipboard has an image: $([System.Windows.Forms.Clipboard]::ContainsImage())"

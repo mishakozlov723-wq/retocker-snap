@@ -100,7 +100,7 @@
     const job = a !== 'none' ? RS.invoke('shot_do', { r: rpx(), action: a, card: false }).then(() => '', e => String(e || 'Не получилось')) : Promise.resolve('');
     await st.capOpen(c.capPos || 'place', monsCss(), a);
     const R = st._cap;
-    if (R && state === 'capsule') RS.invoke('ovl_pass', { r: { x: P(R.C.x), y: P(R.C.y), w: P(R.C.w), h: P(R.C.h) } }).catch(() => {});
+    if (R && state === 'capsule') RS.log('capsule up for ' + (+C().capSec || 0) + ' s');
     const err = await job;
     if (err) { RS.log('shot_do ' + err); st.capDone(a, false, err.slice(0, 40)); }
     busy = false;
@@ -109,7 +109,7 @@
   function armCap() {
     clearTimeout(capT);
     const s = +C().capSec || 0;
-    if (s > 0 && !capHov && state === 'capsule') capT = setTimeout(capEnd, s * 1000);
+    if (s > 0 && !capHov && state === 'capsule') capT = setTimeout(() => capEnd('timer'), s * 1000);
   }
   async function capDo(a) {
     if (busy || state !== 'capsule' || !r) return;
@@ -122,12 +122,13 @@
     busy = false;
     armCap();
   }
-  async function capEnd() {
+  async function capEnd(why) {
     if (state !== 'capsule') return;
+    RS.log('capsule closed: ' + (why || '?'));
     state = 'closing'; clearTimeout(capT);
     try { await Promise.race([st.capClose(), wait(900)]); } finally { close(); }
   }
-  st.onCap = a => a === 'close' ? capEnd() : capDo(a);
+  st.onCap = a => a === 'close' ? capEnd('cross') : capDo(a);
   st.onCapHover = on => { capHov = on; if (on) clearTimeout(capT); else armCap(); };
 
   // ---------------- the round menu
@@ -169,7 +170,7 @@
     if (state === 'off' || busy) return;
     if (e.button === 2 && state !== 'radial' && state !== 'capsule') { e.preventDefault(); return state === 'adjust' ? backToIdle() : close(); }
     if (state === 'radial') { e.preventDefault(); return radEnd(); }
-    if (state === 'capsule') { e.preventDefault(); return capEnd(); }
+    if (state === 'capsule') { e.preventDefault(); return capEnd('click beside'); }
     if (e.button !== 0) return;
     root.setPointerCapture(e.pointerId);
     const x = e.clientX, y = e.clientY;
@@ -224,7 +225,7 @@
     if (state === 'closing') { if (k === 'Escape') close(); return; }
     if (busy && k !== 'Escape') return;
     if (state === 'capsule') {
-      if (k === 'Escape' || k === 'Enter') { e.preventDefault(); return capEnd(); }
+      if (k === 'Escape' || k === 'Enter') { e.preventDefault(); return capEnd('key ' + k); }
       if (e.ctrlKey && (k === 'c' || k === 'с')) { e.preventDefault(); return capDo('copy'); }
       if (e.ctrlKey && (k === 's' || k === 'ы')) { e.preventDefault(); return capDo('save'); }
       if (k === 't' || k === 'T' || k === 'е' || k === 'Е') { e.preventDefault(); return capDo(e.shiftKey && st.ai ? 'ai' : 'ocr'); }
@@ -240,7 +241,7 @@
     if (k === 'Escape') { e.preventDefault(); return state === 'adjust' && e.shiftKey ? backToIdle() : close(); }
     if (state === 'idle' && (k === ' ' || k === 'Enter')) { r = clip(hov || under(mx, my)); return adjust(); }
     if (state === 'idle' && k.toLowerCase() === 'a' && e.ctrlKey) { e.preventDefault(); r = { x: 0, y: 0, w: innerWidth, h: innerHeight }; return adjust(); }
-    if (state === 'idle' && (k === 'l' || k === 'д') && D && D.last) { r = clip({ x: sc(D.last.x), y: sc(D.last.y), w: sc(D.last.w), h: sc(D.last.h) }); return adjust(); }
+    if (state === 'idle' && (k === 'l' || k === '��') && D && D.last) { r = clip({ x: sc(D.last.x), y: sc(D.last.y), w: sc(D.last.w), h: sc(D.last.h) }); return adjust(); }
     if (state !== 'adjust') return;
     if (k === 'Enter' || (e.ctrlKey && (k === 'c' || k === 'с'))) { e.preventDefault(); return act_('copy'); }
     if (e.ctrlKey && (k === 's' || k === 'ы')) { e.preventDefault(); return act_('save'); }

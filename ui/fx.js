@@ -286,10 +286,13 @@
     const CAPS = { copy: ['copy', 'Копировать', 'Изображение скопировано'], save: ['floppy-disk', 'Сохранить', 'Сохранено'], ocr: ['text-t', 'Текст', 'Текст скопирован'], ai: ['sparkle', 'ИИ', 'Ответ ИИ скопирован'] };
     const hoverFx = b => {
       const x = b.classList.contains('x');
-      b.addEventListener('pointerenter', () => RS.anim(b, { backgroundColor: x ? 'rgba(255,122,107,.9)' : 'rgba(255,255,255,.16)', color: '#ffffff', scale: 1.05 }, RS.spring(200, 30)));
-      b.addEventListener('pointerleave', () => RS.anim(b, { backgroundColor: x ? 'rgba(255,255,255,0)' : 'rgba(255,255,255,.07)', color: x ? 'rgba(255,255,255,.5)' : '#ffffff', scale: 1 }, RS.spring(220, 0)));
-      b.addEventListener('pointerdown', () => RS.anim(b, { scale: .94 }, RS.spring(120, 0)));
-      b.addEventListener('pointerup', () => RS.anim(b, { scale: 1.05 }, RS.spring(200, 40)));
+      const tw = { duration: .14, ease: [.3, 0, .2, 1] };
+      const on = x ? { backgroundColor: 'rgba(255,122,107,.9)', color: '#ffffff' } : { backgroundColor: 'rgba(255,255,255,.16)' };
+      const off = x ? { backgroundColor: 'rgba(255,255,255,0)', color: 'rgba(255,255,255,.5)' } : { backgroundColor: 'rgba(255,255,255,.07)' };
+      b.addEventListener('pointerenter', () => RS.anim(b, on, tw));
+      b.addEventListener('pointerleave', () => RS.anim(b, off, tw));
+      b.addEventListener('pointerdown', () => RS.anim(b, { backgroundColor: x ? 'rgba(255,122,107,1)' : 'rgba(255,255,255,.24)' }, { duration: .08 }));
+      b.addEventListener('pointerup', () => RS.anim(b, on, tw));
     };
     st.capOpen = async (pos, mons, first) => {
       const c = st.c, r = st.r; if (!r) return;
@@ -333,10 +336,10 @@
         p.style.borderRadius = L(c.frameR, 30, q) + 'px';
         p.style.boxShadow = `0 18px 50px rgba(0,0,0,${(.45 * q).toFixed(3)})`;
         bg.style.opacity = Math.min(1, q * 1.6);
-        const o = Math.max(0, Math.min(1, (q - .55) / .45));
-        inner.style.opacity = (o * o * (3 - 2 * o)).toFixed(3);
       });
       if (st._cap !== R) return;
+      p.style.left = C.x + 'px'; p.style.top = C.y + 'px'; p.style.width = C.w + 'px'; p.style.height = C.h + 'px';
+      await RS.anim(inner, { opacity: [0, 1] }, { duration: .16, ease: [.3, 0, .2, 1] });
       inner.style.opacity = 1;
     };
     st.capBusy = id => {

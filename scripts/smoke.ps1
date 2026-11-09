@@ -78,6 +78,33 @@ Log "overlay after Esc: $(Vis 'Retocker Snap — выделение')"
 Start-Process $exe -ArgumentList '--test-cfg', 'toolbar=auto' | Out-Null
 Start-Sleep -Milliseconds 500
 
+# the capsule: the selection flows into a pill; the screen must be dimmed right away
+Start-Process $exe -ArgumentList '--test-cfg', 'toolbar=capsule' | Out-Null
+Start-Sleep -Milliseconds 800
+Start-Process $exe -ArgumentList '--test-shot', 'area' | Out-Null
+Start-Sleep -Milliseconds 2200
+Shot "39a-dim-idle"
+Start-Process $exe -ArgumentList '--test-sel', '300,200,640,380' | Out-Null
+Start-Sleep -Milliseconds 1400
+Shot "39-capsule"
+Log "capsule: card visible $(Vis 'Retocker Snap — снимок') (should be False)"
+Log "capsule: clipboard has an image: $([System.Windows.Forms.Clipboard]::ContainsImage())"
+[W]::keybd_event(0x1B, 0x01, 0, [UIntPtr]::Zero); Start-Sleep -Milliseconds 60; [W]::keybd_event(0x1B, 0x01, 2, [UIntPtr]::Zero)
+Start-Sleep -Milliseconds 900
+Log "capsule: overlay after Esc: $(Vis 'Retocker Snap — выделение')"
+Start-Process $exe -ArgumentList '--test-cfg', 'capPos=bottom' | Out-Null
+Start-Sleep -Milliseconds 600
+Start-Process $exe -ArgumentList '--test-shot', 'full' | Out-Null
+Start-Sleep -Milliseconds 2400
+Shot "39b-capsule-full"
+Log "capsule full: overlay visible $(Vis 'Retocker Snap — выделение')"
+[W]::keybd_event(0x1B, 0x01, 0, [UIntPtr]::Zero); Start-Sleep -Milliseconds 60; [W]::keybd_event(0x1B, 0x01, 2, [UIntPtr]::Zero)
+Start-Sleep -Milliseconds 900
+Start-Process $exe -ArgumentList '--test-cfg', 'capPos=place' | Out-Null
+Start-Sleep -Milliseconds 400
+Start-Process $exe -ArgumentList '--test-cfg', 'toolbar=auto' | Out-Null
+Start-Sleep -Milliseconds 500
+
 # full screen straight away
 Start-Process $exe -ArgumentList '--test-shot', 'full' | Out-Null
 Start-Sleep -Milliseconds 3000

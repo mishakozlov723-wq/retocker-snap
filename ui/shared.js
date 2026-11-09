@@ -15,7 +15,7 @@
     sizeLabel: 'corner', snapWin: true,
     // toolbar & after the shot
     toolbar: 'auto', instantAction: 'copy', barStyle: 'pill', barLabels: false,
-    radAct: 'copy', radSize: 132, radSec: 3, radLabels: false, radThumb: true, radSpin: 'fan',
+    radAct: 'copy', radSize: 132, radSec: 3, radLabels: false, radThumb: true, radSpin: 'fan', capAct: 'copy', capPos: 'place', capSec: 3,
     post: 'fly', postMs: 460, bounce: 25, flash: false,
     cardOn: true, cardPos: 'br', cardSec: 4, quickAction: 'copy', saveAlsoCopy: true, copyAlsoSave: false,
     // saving
@@ -70,6 +70,26 @@
     const a = el.animate ? el.animate(toWaapi(kf), { duration: (o.duration || o.visualDuration || .3) * 1000, easing: 'cubic-bezier(.3,1.25,.5,1)', fill: 'forwards' }) : null;
     return a ? a.finished.catch(() => {}) : Promise.resolve();
   }
+  // one number from 0 to 1 on a spring, for shapes that change their size and place (Motion when it is there)
+  function drive(sp, fn) {
+    const M = window.Motion;
+    if (M && M.animate) {
+      const c = M.animate(0, 1, { ...sp, onUpdate: fn });
+      return (c && c.finished ? c.finished : Promise.resolve()).then(() => fn(1));
+    }
+    const d = (sp && sp.visualDuration) || .4, b = sp && sp.bounce != null ? sp.bounce : .2;
+    const z = Math.max(.3, 1 - b * 1.3), w = 6.2 / d, wd = w * Math.sqrt(Math.max(.0001, 1 - z * z)), T = d * 2.2;
+    return new Promise(res => {
+      const t0 = performance.now();
+      const step = now => {
+        const t = (now - t0) / 1000;
+        if (t >= T) { fn(1); return res(); }
+        fn(1 - Math.exp(-z * w * t) * (Math.cos(wd * t) + z * w / wd * Math.sin(wd * t)));
+        requestAnimationFrame(step);
+      };
+      requestAnimationFrame(step);
+    });
+  }
   function toWaapi(kf) {
     const n = Math.max(...Object.values(kf).map(v => Array.isArray(v) ? v.length : 1));
     const out = [];
@@ -90,5 +110,5 @@
   }
   const spring = (ms, bounce) => ({ type: 'spring', visualDuration: Math.max(.05, (ms || 400) / 1000), bounce: Math.max(0, Math.min(.7, (bounce == null ? 25 : bounce) / 100)) });
 
-  window.RS = { DEF, get S() { return S; }, load, set, invoke, listen, log, esc, hkLabel, hkKbd, rgb, hexA, pl, ic, anim, spring, tauri: !!T };
+  window.RS = { DEF, get S() { return S; }, load, set, invoke, listen, log, esc, hkLabel, hkKbd, rgb, hexA, pl, ic, anim, spring, drive, tauri: !!T };
 })();

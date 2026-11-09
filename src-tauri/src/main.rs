@@ -150,6 +150,11 @@ fn ovl_show_now() {
 
 /// full screen / window / last area: no overlay, straight to the action
 fn quick(app: &AppHandle, kind: &str) {
+  // the capsule and the round menu play on the overlay even for the whole screen
+  if kind == "full" && matches!(cfg::all().get("toolbar").and_then(|v| v.as_str()), Some("capsule") | Some("radial")) {
+    start_overlay(app, "full");
+    return;
+  }
   if ACTIVE.load(Ordering::SeqCst) {
     return;
   }
@@ -451,7 +456,7 @@ fn hist_clear() {
 }
 
 fn hist_bgra(id: &str) -> Result<(u32, u32, Vec<u8>, Vec<u8>), String> {
-  let png = hist::read(id, "png").ok_or("файл не найден")?;
+  let png = hist::read(id, "png").ok_or("��айл не найден")?;
   let img = image::load_from_memory_with_format(&png, image::ImageFormat::Png).map_err(|e| e.to_string())?.to_rgba8();
   let (w, hh) = img.dimensions();
   let mut b = img.into_raw();

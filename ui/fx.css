@@ -91,7 +91,7 @@
 
 /* outro */
 .st .ghost{position:absolute;left:0;top:0;overflow:hidden;background-repeat:no-repeat;transform-origin:50% 50%;will-change:transform,opacity;pointer-events:none}
-.st .ghost img{position:absolute;left:0;top:0}
+.st .ghost img{position:absolute;left:0;top:0;transform-origin:0 0;max-width:none}
 .st .flash{position:absolute;inset:0;background:#fff;opacity:0;pointer-events:none}
 .st .hint{position:absolute;left:50%;top:22px;translate:-50% 0;height:34px;padding:0 14px;border-radius:999px;background:rgba(22,22,22,.9);color:rgba(255,255,255,.9);display:flex;align-items:center;gap:8px;font-size:12.5px;font-weight:650;
   box-shadow:0 0 0 1px rgba(255,255,255,.1),0 10px 30px rgba(0,0,0,.4);pointer-events:none;opacity:0;transition:opacity .2s}
@@ -113,7 +113,6 @@
 .st .rc .rk{width:34px;height:34px;border-radius:50%;display:grid;place-items:center;background:#5fcf98;color:#0d2a1c;box-shadow:0 6px 18px rgba(95,207,152,.35)}
 .st .rc.bad .rk{background:#ff7a6b;color:#2a0f0b}
 .st .rc .rk svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:1;stroke-dashoffset:1}
-.st .rc.ok .rk svg{animation:rdraw .42s .08s cubic-bezier(.4,0,.2,1) forwards}
 .st .rc.bad .rk svg{stroke-dashoffset:0}
 @keyframes rdraw{to{stroke-dashoffset:0}}
 .st .rc .rsp{position:absolute;inset:-5px;border-radius:50%;border:2px solid transparent;border-top-color:rgba(255,255,255,.9);opacity:0;transition:opacity .15s}
@@ -131,3 +130,26 @@
 .st .ro .rl{position:absolute;top:50%;left:50%;white-space:nowrap;font-size:10.5px;font-weight:700;color:#fff;padding:2px 7px;border-radius:6px;background:rgba(22,22,22,.85);pointer-events:none}
 .st .ro .tt{position:absolute;bottom:calc(100% + 7px);left:50%;translate:-50% 3px;padding:4px 8px;border-radius:6px;background:rgba(22,22,22,.95);color:#fff;font-size:11px;font-weight:650;white-space:nowrap;opacity:0;pointer-events:none;transition:opacity .12s,translate .12s;box-shadow:0 0 0 1px rgba(255,255,255,.1)}
 .st .ro:hover .tt{opacity:1;translate:-50% 0}
+
+/* a hovered window: lit a bit, the rest stays dimmed */
+.st.soft .hole::after{content:'';position:absolute;inset:0;background:var(--dim);opacity:.4;pointer-events:none}
+/* the capsule */
+.st .cp{position:absolute;left:0;top:0;overflow:hidden;pointer-events:auto}
+.st .cp .cpb{position:absolute;inset:0;border-radius:inherit;background:rgba(26,26,26,.95);box-shadow:inset 0 0 0 1px rgba(255,255,255,.09);opacity:0;backdrop-filter:blur(14px)}
+.st .cp .cpi{position:absolute;left:0;top:0;height:60px;width:max-content;display:flex;align-items:center;gap:6px;padding:0 10px 0 88px;box-sizing:border-box;font-family:Manrope,system-ui,sans-serif}
+.st .cp .ck{position:relative;width:20px;height:20px;border-radius:50%;background:#5fcf98;color:#0d2a1c;display:grid;place-items:center;flex:none}
+.st .cp .ck svg{width:13px;height:13px;fill:none;stroke:currentColor;stroke-width:3;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:1;stroke-dashoffset:0}
+.st .cp .ck.bad{background:#ff7a6b;color:#2a0f0b}
+.st .cp .ck i{position:absolute;inset:-4px;border-radius:50%;border:2px solid transparent;border-top-color:#fff;opacity:0}
+.st .cp .ck.busy i{opacity:1;animation:rspin .7s linear infinite}
+.st .cp .ck.busy svg{opacity:0}
+.st .cp .ct{display:flex;flex-direction:column;justify-content:center;width:172px;margin-right:4px}
+.st .cp .ct b{font-size:12.5px;font-weight:750;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.25}
+.st .cp .ct small{font-size:10.5px;font-weight:650;color:rgba(255,255,255,.45);font-variant-numeric:tabular-nums;line-height:1.35}
+.st .cp .cb{all:unset;box-sizing:border-box;position:relative;height:36px;min-width:36px;padding:0 12px;border-radius:18px;display:flex;align-items:center;justify-content:center;gap:6px;font-size:12px;font-weight:700;color:#fff;background:rgba(255,255,255,.07);cursor:pointer;flex:none}
+.st .cp .cb.i{padding:0;width:36px}
+.st .cp .cb svg{width:16px;height:16px;fill:currentColor;flex:none}
+.st .cp .cb.x{background:rgba(255,255,255,0);color:rgba(255,255,255,.5)}
+.st .cp .cb.act{box-shadow:inset 0 0 0 1.5px rgba(255,255,255,.75)}
+.st .cp .cb.dn::after{content:'';position:absolute;right:0;top:0;width:8px;height:8px;border-radius:50%;background:#5fcf98;box-shadow:0 0 0 2px #1c1c1c}
+.st .cpg{box-shadow:0 0 0 1px rgba(255,255,255,.14)}

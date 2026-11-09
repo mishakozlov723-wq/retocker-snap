@@ -8,7 +8,7 @@
   const P = v => Math.round(v * dpr);
 
   RS.listen('shot', e => start(e.payload).catch(err => { RS.log('ovl start ' + err); RS.invoke('ovl_ready', { n: e.payload.n }).catch(() => {}); }));
-  RS.listen('force', () => { root.classList.add('ready'); });
+  RS.listen('force', () => { root.classList.add('ready'); if (state === 'idle') st.intro(mx, my); });
   RS.listen('test_sel', e => {
     const [x, y, w, h, act] = String(e.payload || '').split(',');
     r = { x: +x / dpr, y: +y / dpr, w: +w / dpr, h: +h / dpr };
@@ -29,12 +29,24 @@
     a0 = null; r = null; drag = null; hov = null; state = 'idle';
     document.body.className = '';
     mx = (d.cur ? d.cur[0] : W * dpr / 2) / dpr; my = (d.cur ? d.cur[1] : H * dpr / 2) / dpr;
+    const full = d.mode === 'full';
+    // the dim is ready before the window shows and plays once it is really on screen
+    if (full) st.shadeOff(); else st.introPrep(mx, my);
     root.classList.add('ready');
-    st.intro(mx, my);
     if (d.mode === 'text') st.hint(`${RS.ic('text-t')} Выдели текст — он сразу окажется в буфере <kbd>Esc</kbd>`);
-    idleMove();
-    await RS.invoke('ovl_ready', { n: d.n });
-    window.focus();
+    if (!full) idleMove();
+    try { await RS.invoke('ovl_ready', { n: d.n }); }
+    finally {
+      window.focus();
+      if (full) fullShot(); else st.intro(mx, my);
+    }
+  }
+  // the whole screen with the capsule or the round menu: the monitor under the mouse flows into it
+  function fullShot() {
+    const px = mx * dpr, py = my * dpr;
+    const m = (D.mons || []).find(q => inR(px, py, q));
+    r = m ? clip({ x: sc(m.x), y: sc(m.y), w: sc(m.w), h: sc(m.h) }) : { x: 0, y: 0, w: innerWidth, h: innerHeight };
+    adjust();
   }
 
   const C = () => st.c;
@@ -44,17 +56,20 @@
     if (!D) return null;
     const px = x * dpr, py = y * dpr;
     if (C().snapWin) for (const w of D.wins || []) if (inR(px, py, w)) return { x: sc(w.x), y: sc(w.y), w: sc(w.w), h: sc(w.h) };
-    for (const m of D.mons || []) if (inR(px, py, m)) return { x: sc(m.x), y: sc(m.y), w: sc(m.w), h: sc(m.h) };
-    return { x: 0, y: 0, w: innerWidth, h: innerHeight };
+    for (const m of D.mons || []) if (inR(px, py, m)) return { x: sc(m.x), y: sc(m.y), w: sc(m.w), h: sc(m.h), mon: true };
+    return { x: 0, y: 0, w: innerWidth, h: innerHeight, mon: true };
   }
   function clip(q) {
     const W = innerWidth, H = innerHeight;
     let x = Math.max(0, q.x), y = Math.max(0, q.y);
     return { x, y, w: Math.max(0, Math.min(W, q.x + q.w) - x), h: Math.max(0, Math.min(H, q.y + q.h) - y) };
   }
+  const monsCss = () => (D && D.mons || []).map(m => ({ x: sc(m.x), y: sc(m.y), w: sc(m.w), h: sc(m.h) }));
+  // a window that fills its monitor is not lit up: the whole screen stays dimmed
+  const big = q => monsCss().some(m => q.w * q.h >= m.w * m.h * .9 && q.x < m.x + m.w && q.x + q.w > m.x && q.y < m.y + m.h && q.y + q.h > m.y);
   function idleMove() {
     hov = under(mx, my);
-    st.hover(C().snapWin ? hov : null);
+    st.hover(C().snapWin && hov && !hov.mon && !big(hov) ? hov : null);
     st.cursor(mx, my, true);
   }
   function adjust() {
@@ -64,9 +79,48 @@
     st.cursor(0, 0, false);
     if (D && D.mode === 'text') return act_('ocr');
     if (C().toolbar === 'instant') return act_(C().instantAction || 'copy');
+    if (C().toolbar === 'capsule') return capsule();
     if (C().toolbar === 'radial') return radial();
     st.bar(true);
   }
+
+  // ---------------- the capsule
+  let capT = 0, capHov = false;
+  async function capsule() {
+    state = 'capsule'; busy = true; capHov = false;
+    st.cursor(0, 0, false);
+    const c = C(), a = c.capAct || 'copy';
+    const job = a !== 'none' ? RS.invoke('shot_do', { r: rpx(), action: a, card: false }).then(() => '', e => String(e || 'Не получилось')) : Promise.resolve('');
+    await st.capOpen(c.capPos || 'place', monsCss(), a);
+    const err = await job;
+    if (err) { RS.log('shot_do ' + err); st.capDone(a, false, err.slice(0, 40)); }
+    busy = false;
+    armCap();
+  }
+  function armCap() {
+    clearTimeout(capT);
+    const s = +C().capSec || 0;
+    if (s > 0 && !capHov && state === 'capsule') capT = setTimeout(capEnd, s * 1000);
+  }
+  async function capDo(a) {
+    if (busy || state !== 'capsule' || !r) return;
+    busy = true; clearTimeout(capT);
+    st.capBusy(a);
+    let ok = true, txt = '';
+    try { await RS.invoke('shot_do', { r: rpx(), action: a, card: false }); }
+    catch (e) { ok = false; txt = String(e || '').slice(0, 40); RS.log('shot_do ' + e); }
+    st.capDone(a, ok, ok ? '' : txt || 'Не получилось');
+    busy = false;
+    armCap();
+  }
+  async function capEnd() {
+    if (state !== 'capsule') return;
+    state = 'closing'; clearTimeout(capT);
+    await st.capClose();
+    close();
+  }
+  st.onCap = a => a === 'close' ? capEnd() : capDo(a);
+  st.onCapHover = on => { capHov = on; if (on) clearTimeout(capT); else armCap(); };
 
   // ---------------- the round menu
   let radT = 0, radHov = false;
@@ -106,8 +160,9 @@
 
   root.addEventListener('pointerdown', e => {
     if (state === 'off' || busy) return;
-    if (e.button === 2 && state !== 'radial') { e.preventDefault(); return state === 'adjust' ? backToIdle() : close(); }
+    if (e.button === 2 && state !== 'radial' && state !== 'capsule') { e.preventDefault(); return state === 'adjust' ? backToIdle() : close(); }
     if (state === 'radial') { e.preventDefault(); return radEnd(); }
+    if (state === 'capsule') { e.preventDefault(); return capEnd(); }
     if (e.button !== 0) return;
     root.setPointerCapture(e.pointerId);
     const x = e.clientX, y = e.clientY;
@@ -158,6 +213,13 @@
   addEventListener('keydown', e => {
     if (state === 'off' || busy) return;
     const k = e.key;
+    if (state === 'capsule') {
+      if (k === 'Escape' || k === 'Enter') { e.preventDefault(); return capEnd(); }
+      if (e.ctrlKey && (k === 'c' || k === 'с')) { e.preventDefault(); return capDo('copy'); }
+      if (e.ctrlKey && (k === 's' || k === 'ы')) { e.preventDefault(); return capDo('save'); }
+      if (k === 't' || k === 'T' || k === 'е' || k === 'Е') { e.preventDefault(); return capDo(e.shiftKey && st.ai ? 'ai' : 'ocr'); }
+      return;
+    }
     if (state === 'radial') {
       if (k === 'Escape' || k === 'Enter') { e.preventDefault(); return radEnd(); }
       if (e.ctrlKey && (k === 'c' || k === 'с')) { e.preventDefault(); return radDo('copy'); }
@@ -188,6 +250,7 @@
 
   async function act_(action) {
     if (state === 'radial') return radDo(action);
+    if (state === 'capsule') return capDo(action);
     if (busy || !r || r.w < 1 || r.h < 1) return;
     busy = true; document.body.classList.add('busy');
     const c = C();
@@ -206,7 +269,7 @@
   }
 
   function close() {
-    state = 'off'; busy = false; clearTimeout(radT);
+    state = 'off'; busy = false; clearTimeout(radT); clearTimeout(capT);
     RS.invoke('ovl_hide').catch(() => {});
     setTimeout(() => { st.reset(); root.classList.remove('ready'); }, 30);
   }

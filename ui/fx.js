@@ -33,6 +33,7 @@
     const flash = $e('div', 'flash', el);
     const hint = $e('div', 'hint', el);
     const rad = $e('div', 'rad', el);
+    const cap = $e('div', 'rad', el);
     const st = { el, W: 0, H: 0, dpr: 1, url: '', r: null, adj: false, c: {}, ai: false, onAct: null, cv: null, cvx: null };
 
     st.frame = (url, W, H, dpr) => {
@@ -117,13 +118,13 @@
 
     st.hover = r => {
       if (st.adj) return;
-      if (!r) { el.classList.add('nohole'); fr.style.visibility = 'hidden'; lab.classList.remove('on'); st.r = null; return; }
-      el.classList.remove('nohole'); fr.style.visibility = ''; fr.classList.add('hov');
+      if (!r) { el.classList.add('nohole'); el.classList.remove('soft'); fr.style.visibility = 'hidden'; lab.classList.remove('on'); st.r = null; return; }
+      el.classList.remove('nohole'); el.classList.add('soft'); fr.style.visibility = ''; fr.classList.add('hov');
       st.r = r; place();
     };
     st.select = (r, adj) => {
       st.adj = !!adj;
-      el.classList.remove('nohole'); fr.style.visibility = ''; fr.classList.remove('hov');
+      el.classList.remove('nohole', 'soft'); fr.style.visibility = ''; fr.classList.remove('hov');
       fr.classList.toggle('adj', st.adj);
       st.r = r; place();
     };
@@ -183,6 +184,21 @@
       else bar.style.opacity = 1;
     };
 
+    // a piece of the frozen screen flows from one box into another: one spring drives the size, the place and the corners
+    function morphBox(gh, gi, A, B, ra, rb, sp, extra) {
+      const L = (a, b, p) => a + (b - a) * p;
+      const set = p => {
+        const x = L(A.x, B.x, p), y = L(A.y, B.y, p), w = Math.max(1, L(A.w, B.w, p)), h = Math.max(1, L(A.h, B.h, p));
+        const q = Math.max(0, Math.min(1, p));
+        gh.style.left = x + 'px'; gh.style.top = y + 'px'; gh.style.width = w + 'px'; gh.style.height = h + 'px';
+        gh.style.borderRadius = Math.max(0, L(ra, rb, q)) + 'px';
+        const s = Math.max(w / A.w, h / A.h), ox = (w - A.w * s) / 2, oy = (h - A.h * s) / 2;
+        gi.style.transform = `translate(${ox - A.x * s}px,${oy - A.y * s}px) scale(${s})`;
+        if (extra) extra(p);
+      };
+      set(0);
+      return RS.drive(sp, set);
+    }
     // ---------------- the round menu: the frame turns into a circle, the buttons come out around it
     rad.addEventListener('pointerdown', e => e.stopPropagation());
     rad.addEventListener('click', e => { const b = e.target.closest('button'); if (b && st.onRad) st.onRad(b.dataset.a); });
@@ -195,18 +211,11 @@
       const ccx = Math.max(M, Math.min(st.W - M, r.x + r.w / 2)), ccy = Math.max(M, Math.min(st.H - M, r.y + r.h / 2));
       fr.style.visibility = 'hidden'; lab.classList.remove('on'); st.bar(false); mag.classList.remove('on'); el.classList.remove('crs');
       el.classList.add('nohole');
-      // the picture: one box around both the selection and the circle, clipped from the one to the other
-      const bx = Math.min(r.x, ccx - D / 2), by = Math.min(r.y, ccy - D / 2), bx2 = Math.max(r.x + r.w, ccx + D / 2), by2 = Math.max(r.y + r.h, ccy + D / 2);
+      // the picture: the selection itself flows into the circle
       const gh = $e('div', 'ghost rgh', rad), gi = $e('img', '', gh);
-      gi.src = st.url; gi.style.width = st.W + 'px'; gi.style.height = st.H + 'px'; gi.style.transform = `translate(${-bx}px,${-by}px)`;
-      Object.assign(gh.style, { left: bx + 'px', top: by + 'px', width: bx2 - bx + 'px', height: by2 - by + 'px' });
-      const from = `inset(${r.y - by}px ${bx2 - r.x - r.w}px ${by2 - r.y - r.h}px ${r.x - bx}px round ${c.frameR}px)`;
-      const to = `inset(${ccy - D / 2 - by}px ${bx2 - ccx - D / 2}px ${by2 - ccy - D / 2}px ${ccx - D / 2 - bx}px round ${D / 2}px)`;
-      gh.style.clipPath = to;
-      const ms = Math.max(200, c.postMs * 1.1), b = 1 + Math.min(.6, (c.bounce || 0) / 100);
-      if (gh.animate) gh.animate([{ clipPath: from }, { clipPath: to }], { duration: ms, easing: `cubic-bezier(.3,${b.toFixed(2)},.45,1)` });
-      // a timer, not .finished: a clip-path animation may never report the end on some machines
-      const morph = new Promise(res => setTimeout(res, ms * .8));
+      gi.src = st.url; gi.style.width = st.W + 'px'; gi.style.height = st.H + 'px';
+      const ms = Math.max(220, c.postMs * 1.1);
+      const morph = morphBox(gh, gi, r, { x: ccx - D / 2, y: ccy - D / 2, w: D, h: D }, c.frameR, D / 2, RS.spring(ms, Math.min(c.bounce || 0, 25)));
       if (c.flash) RS.anim(flash, { opacity: [0, .8, 0] }, { duration: .26 });
       // the middle and the ring of buttons
       const mid = $e('div', 'rc' + (c.radThumb ? ' th' : ''), rad);
@@ -246,7 +255,11 @@
       R.mid.classList.remove('ok', 'bad'); void R.mid.offsetWidth;
       R.mid.classList.add(ok ? 'ok' : 'bad');
       R.btns.forEach(b => { b.classList.remove('act'); if (ok && b.dataset.a === id) b.classList.add('dn'); });
-      RS.anim(R.mid.querySelector('.rci'), { scale: [.7, 1], opacity: [0, 1] }, RS.spring(320, 45));
+      const ci = R.mid.querySelector('.rci'), kk = ci.querySelector('.rk'), bb = ci.querySelector('b'), pth = kk.querySelector('path');
+      ci.style.opacity = 1;
+      RS.anim(kk, { scale: [.4, 1], opacity: [0, 1] }, RS.spring(340, 45));
+      RS.anim(bb, { opacity: [0, 1], y: [6, 0], filter: ['blur(4px)', 'blur(0px)'] }, RS.spring(300, 0));
+      if (pth) RS.anim(pth, { strokeDashoffset: ok ? [1, 0] : [0, 0] }, { duration: .38, delay: .06, ease: [.4, 0, .2, 1] });
     };
     st.radClose = async () => {
       const R = st._rad; if (!R) return;
@@ -261,18 +274,119 @@
       rad.classList.remove('on'); rad.innerHTML = '';
     };
 
+    // ---------------- the capsule: the selection flows into a pill with the result and a few buttons
+    cap.addEventListener('pointerdown', e => e.stopPropagation());
+    cap.addEventListener('click', e => { const b = e.target.closest('button'); if (b && st.onCap) st.onCap(b.dataset.a); });
+    cap.addEventListener('pointerenter', () => st.onCapHover && st.onCapHover(true));
+    cap.addEventListener('pointerleave', () => st.onCapHover && st.onCapHover(false));
+    const CAPS = { copy: ['copy', 'Копировать', 'Изображение скопировано'], save: ['floppy-disk', 'Сохранить', 'Сохранено'], ocr: ['text-t', 'Текст', 'Текст скопирован'], ai: ['sparkle', 'ИИ', 'Ответ ИИ скопирован'] };
+    const hoverFx = b => {
+      const x = b.classList.contains('x');
+      b.addEventListener('pointerenter', () => RS.anim(b, { backgroundColor: x ? 'rgba(255,122,107,.9)' : 'rgba(255,255,255,.16)', color: '#ffffff', scale: 1.05 }, RS.spring(200, 30)));
+      b.addEventListener('pointerleave', () => RS.anim(b, { backgroundColor: x ? 'rgba(255,255,255,0)' : 'rgba(255,255,255,.07)', color: x ? 'rgba(255,255,255,.5)' : '#ffffff', scale: 1 }, RS.spring(220, 0)));
+      b.addEventListener('pointerdown', () => RS.anim(b, { scale: .94 }, RS.spring(120, 0)));
+      b.addEventListener('pointerup', () => RS.anim(b, { scale: 1.05 }, RS.spring(200, 40)));
+    };
+    st.capOpen = async (pos, mons, first) => {
+      const c = st.c, r = st.r; if (!r) return;
+      fr.style.visibility = 'hidden'; lab.classList.remove('on'); st.bar(false); mag.classList.remove('on'); el.classList.remove('crs', 'soft');
+      el.classList.add('nohole');
+      const acts = ['copy', 'save', 'ocr', 'ai'].filter(a => a !== first && (a !== 'ai' || st.ai));
+      const msg = !first || first === 'none' ? 'Снимок готов' : CAPS[first][2];
+      const p = $e('div', 'cp', cap);
+      p.innerHTML = `<div class="cpb"></div><div class="cpi"><span class="ck">${CHECK}<i></i></span><span class="ct"><b>${msg}</b><small>${Math.round(r.w * st.dpr)} × ${Math.round(r.h * st.dpr)}</small></span>` +
+        acts.map(a => `<button class="cb${a === 'ai' ? ' i' : ''}" data-a="${a}" title="${CAPS[a][1]}">${RS.ic(CAPS[a][0])}${a === 'ai' ? '' : `<span>${CAPS[a][1]}</span>`}</button>`).join('') +
+        `<button class="cb i x" data-a="close" title="Закрыть">${RS.ic('x')}</button></div>`;
+      const inner = p.querySelector('.cpi'), bg = p.querySelector('.cpb');
+      inner.querySelectorAll('.cb').forEach(hoverFx);
+      cap.classList.add('on'); // the layer is hidden until then, and a hidden pill measures as zero
+      // the font must be there before measuring, or the last button gets cut off
+      if (document.fonts && document.fonts.ready) await Promise.race([document.fonts.ready, new Promise(res => setTimeout(res, 150))]);
+      const Wc = Math.max(420, Math.ceil(inner.getBoundingClientRect().width) + 2), Hc = 60;
+      const cx = r.x + r.w / 2, cy = r.y + r.h / 2;
+      const m = (mons || []).find(q => cx >= q.x && cy >= q.y && cx < q.x + q.w && cy < q.y + q.h) || { x: 0, y: 0, w: st.W, h: st.H };
+      let x = cx - Wc / 2, y = cy - Hc / 2;
+      if (pos === 'bottom') { x = m.x + m.w / 2 - Wc / 2; y = m.y + m.h - Hc - Math.max(16, Math.min(72, m.h * .08)); }
+      else if (pos === 'top') { x = m.x + m.w / 2 - Wc / 2; y = m.y + Math.max(12, Math.min(48, m.h * .05)); }
+      x = Math.max(m.x + 10, Math.min(m.x + m.w - Wc - 10, x)); y = Math.max(m.y + 10, Math.min(m.y + m.h - Hc - 10, y));
+      const C = { x, y, w: Wc, h: Hc }, T = { x: x + 8, y: y + 8, w: 68, h: 44 };
+      const gh = $e('div', 'ghost cpg', cap), gi = $e('img', '', gh);
+      gi.src = st.url; gi.style.width = st.W + 'px'; gi.style.height = st.H + 'px';
+      inner.style.opacity = 0;
+      const R = st._cap = { p, gh, inner, pos, C, T };
+      cap.classList.add('on');
+      const L = (a, b, t) => a + (b - a) * t;
+      const ms = Math.max(260, c.postMs * 1.15);
+      if (c.flash) RS.anim(flash, { opacity: [0, .7, 0] }, { duration: .26 });
+      const so = +getComputedStyle(shade).opacity;
+      if (so > 0) RS.anim(shade, { opacity: [so, 0] }, { duration: Math.min(.4, ms / 1000), ease: [.3, 0, .2, 1] });
+      await morphBox(gh, gi, r, T, c.frameR, 13, RS.spring(ms, Math.min(c.bounce || 0, 22)), t => {
+        const q = Math.max(0, Math.min(1, t));
+        p.style.left = L(r.x, C.x, t) + 'px'; p.style.top = L(r.y, C.y, t) + 'px';
+        p.style.width = Math.max(1, L(r.w, C.w, t)) + 'px'; p.style.height = Math.max(1, L(r.h, C.h, t)) + 'px';
+        p.style.borderRadius = L(c.frameR, 30, q) + 'px';
+        p.style.boxShadow = `0 18px 50px rgba(0,0,0,${(.45 * q).toFixed(3)})`;
+        bg.style.opacity = Math.min(1, q * 1.6);
+      });
+      if (st._cap !== R) return;
+      const ck = inner.querySelector('.ck'), tx = inner.querySelector('.ct'), bs = [...inner.querySelectorAll('.cb')], pth = ck.querySelector('path');
+      ck.style.opacity = 0; tx.style.opacity = 0; bs.forEach(b => b.style.opacity = 0);
+      inner.style.opacity = 1;
+      RS.anim(ck, { scale: [.3, 1], opacity: [0, 1] }, RS.spring(360, 45));
+      if (pth) RS.anim(pth, { strokeDashoffset: [1, 0] }, { duration: .36, delay: .1, ease: [.4, 0, .2, 1] });
+      RS.anim(tx, { opacity: [0, 1], x: [-8, 0], filter: ['blur(4px)', 'blur(0px)'] }, RS.spring(320, 0));
+      await Promise.all(bs.map((b, i) => new Promise(res => setTimeout(() => {
+        RS.anim(b, { opacity: [0, 1], x: [-10, 0], scale: [.9, 1] }, RS.spring(300, 20)).then(res, res);
+      }, 60 + i * 45))));
+    };
+    st.capBusy = id => {
+      const R = st._cap; if (!R) return;
+      R.inner.querySelector('.ck').classList.add('busy');
+      R.inner.querySelectorAll('.cb').forEach(b => b.classList.toggle('act', b.dataset.a === id));
+    };
+    st.capDone = (id, ok, text) => {
+      const R = st._cap; if (!R) return;
+      const ck = R.inner.querySelector('.ck'), b = R.inner.querySelector('.ct b'), pth = ck.querySelector('path');
+      ck.classList.remove('busy'); ck.classList.toggle('bad', !ok);
+      R.inner.querySelectorAll('.cb').forEach(x => { x.classList.remove('act'); if (ok && x.dataset.a === id) x.classList.add('dn'); });
+      b.textContent = text || (ok ? (CAPS[id] || [])[2] || 'Готово' : 'Не получилось');
+      RS.anim(b, { opacity: [0, 1], y: [5, 0], filter: ['blur(3px)', 'blur(0px)'] }, RS.spring(280, 0));
+      RS.anim(ck, { scale: [.6, 1] }, RS.spring(320, 50));
+      if (pth && ok) RS.anim(pth, { strokeDashoffset: [1, 0] }, { duration: .34, ease: [.4, 0, .2, 1] });
+    };
+    st.capClose = async () => {
+      const R = st._cap; if (!R) return;
+      st._cap = null;
+      const dy = R.pos === 'top' ? -14 : 14;
+      R.gh.style.transformOrigin = `${R.C.x + R.C.w / 2 - R.T.x}px ${R.C.y + R.C.h / 2 - R.T.y}px`;
+      await Promise.all([R.p, R.gh].map(x => RS.anim(x, { opacity: [1, 0], y: [0, dy], scale: [1, .94], filter: ['blur(0px)', 'blur(4px)'] }, RS.spring(260, 0))));
+      cap.classList.remove('on'); cap.innerHTML = '';
+    };
+    st.shadeOff = () => { shade.style.opacity = 0; };
+
     st.hint = html => { if (html) hint.innerHTML = html; hint.classList.toggle('on', !!html); };
 
+    const tint = el.querySelector('.tint');
+    st.introPrep = (cxp, cyp) => {
+      const c = st.c;
+      if (c.appear === 'none') return;
+      if (c.appear === 'zoom') el.style.opacity = 0;
+      else if (c.appear === 'wave') shade.style.clipPath = `circle(0px at ${cxp}px ${cyp}px)`;
+      else tint.style.opacity = 0;
+    };
     st.intro = (cxp, cyp) => {
       const c = st.c, ms = Math.max(40, c.appearMs);
-      if (c.appear === 'none' || !shade.animate) return;
+      const done = () => { el.style.opacity = ''; tint.style.opacity = ''; shade.style.clipPath = ''; };
+      if (c.appear === 'none') return done();
       if (c.appear === 'wave') {
         const R = Math.hypot(Math.max(cxp, st.W - cxp), Math.max(cyp, st.H - cyp));
-        shade.animate([{ clipPath: `circle(0px at ${cxp}px ${cyp}px)` }, { clipPath: `circle(${R}px at ${cxp}px ${cyp}px)` }], { duration: ms * 1.6, easing: 'cubic-bezier(.3,.7,.2,1)' });
-        el.querySelector('.tint').animate([{ opacity: 0 }, { opacity: 1 }], { duration: ms * 1.6 });
-      } else if (c.appear === 'zoom') {
-        el.animate([{ opacity: 0, transform: 'scale(1.015)' }, { opacity: 1, transform: 'none' }], { duration: ms, easing: 'cubic-bezier(.2,.8,.2,1)' });
-      } else el.querySelector('.tint').animate([{ opacity: 0 }, { opacity: 1 }], { duration: ms, easing: 'ease-out' });
+        const a = shade.animate ? shade.animate([{ clipPath: `circle(0px at ${cxp}px ${cyp}px)` }, { clipPath: `circle(${R}px at ${cxp}px ${cyp}px)` }], { duration: ms * 1.6, easing: 'cubic-bezier(.3,.7,.2,1)' }) : null;
+        shade.style.clipPath = '';
+        RS.anim(tint, { opacity: [0, 1] }, { duration: ms * 1.6 / 1000 });
+        return a ? a.finished.then(done, done) : done();
+      }
+      if (c.appear === 'zoom') return RS.anim(el, { opacity: [0, 1], scale: [1.015, 1] }, RS.spring(ms * 1.4, 0)).then(done, done);
+      return RS.anim(tint, { opacity: [0, 1] }, { duration: ms / 1000, ease: [.2, .8, .2, 1] }).then(done, done);
     };
 
     // the snapshot leaves the screen; target: where the corner card will be
@@ -321,6 +435,8 @@
       fr.style.visibility = 'hidden'; fr.classList.remove('adj', 'hov');
       lab.classList.remove('on'); mag.classList.remove('on'); st.bar(false); st.hint('');
       st._rad = null; rad.classList.remove('on'); rad.innerHTML = '';
+      st._cap = null; cap.classList.remove('on'); cap.innerHTML = ''; el.classList.remove('soft');
+      el.style.opacity = ''; tint.style.opacity = ''; shade.style.clipPath = '';
       shade.style.opacity = ''; shade.style.transform = ''; flash.style.opacity = 0;
       for (const a of el.getAnimations ? el.getAnimations({ subtree: true }) : []) { try { a.cancel(); } catch (e) {} }
       el.querySelectorAll('.ghost').forEach(x => x.remove());
@@ -411,6 +527,22 @@
         if (!ok()) return;
         st.cursor(B.x, B.y, false);
         st.select({ x: A.x, y: A.y, w: B.x - A.x, h: B.y - A.y }, true);
+        if (c.toolbar === 'capsule') {
+          cur.style.opacity = 0;
+          const a = c.capAct || 'copy', nx = a === 'save' ? 'copy' : 'save';
+          await st.capOpen(c.capPos || 'place', null, a);
+          if (!ok()) return;
+          await sleep(900);
+          if (!ok()) return;
+          st.capBusy(nx); await sleep(300); st.capDone(nx, true);
+          await sleep(o.outro ? 1500 : 2000);
+          if (!ok()) return;
+          await st.capClose();
+          if (o.onDone) o.onDone();
+          await sleep(700);
+          cur.style.opacity = '';
+          continue;
+        }
         if (c.toolbar === 'radial') {
           cur.style.opacity = 0;
           await st.radOpen();

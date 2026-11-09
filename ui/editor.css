@@ -1,0 +1,65 @@
+/* Retocker Snap: the picture editor (opens from the capsule thumbnail) */
+.ed{position:fixed;inset:0;z-index:50;font-family:Manrope,system-ui,sans-serif;color:#fff;user-select:none;-webkit-user-select:none;cursor:default;-webkit-font-smoothing:antialiased}
+.ed .edbg{position:absolute;inset:0;overflow:hidden;opacity:0;pointer-events:none;will-change:opacity}
+.ed .edbg img{position:absolute;left:0;top:0;max-width:none;filter:blur(24px) brightness(.5) saturate(1.1);transform:scale(1.05);transform-origin:50% 50%}
+.ed .edbg i{position:absolute;inset:0;background:rgba(14,14,14,.38)}
+.ed .edgh{position:absolute;left:0;top:0;overflow:hidden;border-radius:14px;background:#111;box-shadow:0 28px 80px rgba(0,0,0,.5),0 0 0 1px rgba(255,255,255,.1);pointer-events:none;will-change:left,top,width,height}
+.ed .edgh img,.ed .edgh canvas{position:absolute;left:0;top:0;max-width:none;transform-origin:0 0}
+.ed .edv{position:absolute;left:0;top:0;overflow:hidden;border-radius:14px;background:#111;box-shadow:0 28px 80px rgba(0,0,0,.5),0 0 0 1px rgba(255,255,255,.1);visibility:hidden;touch-action:none}
+.ed .edv.on{visibility:visible}
+.ed .edw{position:absolute;left:0;top:0;pointer-events:none}
+.ed .edw canvas{position:absolute;left:0;top:0;width:100%;height:100%}
+.ed .edv[data-tool=brush],.ed .edv[data-tool=marker],.ed .edv[data-tool=eraser],.ed .edv[data-tool=blur]{cursor:none}
+.ed .edv[data-tool=rect],.ed .edv[data-tool=ellipse],.ed .edv[data-tool=line],.ed .edv[data-tool=arrow],.ed .edv[data-tool=crop]{cursor:crosshair}
+.ed .edv[data-tool=text]{cursor:text}
+.ed .edv[data-tool=text].ontx{cursor:move}
+.ed .edcur{position:absolute;left:0;top:0;border-radius:50%;box-sizing:border-box;border:1.5px solid #fff;box-shadow:0 0 0 1px rgba(0,0,0,.45),inset 0 0 0 1px rgba(0,0,0,.35);pointer-events:none;display:none;z-index:3}
+/* pills */
+.ed .edpill{position:absolute;left:0;top:0;box-sizing:border-box;border-radius:16px;background:rgba(26,26,26,.96);box-shadow:inset 0 0 0 1px rgba(255,255,255,.09),0 18px 50px rgba(0,0,0,.45);opacity:0;visibility:hidden;z-index:2}
+.ed .edbar{height:52px;display:flex;align-items:center;gap:2px;padding:0 6px;width:max-content}
+.ed .edopt{height:48px}
+.ed .edtg{position:relative;display:flex;align-items:center;gap:2px;height:40px}
+.ed .edhl{position:absolute;left:0;top:0;width:40px;height:40px;border-radius:12px;background:rgba(255,255,255,.15);pointer-events:none}
+.ed .eb{position:relative;width:40px;height:40px;border-radius:12px;display:grid;place-items:center;color:rgba(255,255,255,.62);cursor:pointer;flex:none}
+.ed .eb svg{width:20px;height:20px;fill:currentColor;pointer-events:none}
+.ed .et{position:relative;height:38px;padding:0 15px;border-radius:12px;display:flex;align-items:center;gap:7px;font-size:12.5px;font-weight:700;color:#fff;cursor:pointer;flex:none;white-space:nowrap}
+.ed .et svg{width:16px;height:16px;fill:currentColor;flex:none;pointer-events:none}
+.ed .et.pr{color:#191919;margin-left:4px}
+.ed .edsep{width:1px;height:22px;background:rgba(255,255,255,.1);margin:0 6px;flex:none}
+.ed .edoa,.ed .edob{position:absolute;top:0;height:48px;display:flex;align-items:center;gap:2px;padding:0 8px;width:max-content;box-sizing:border-box}
+.ed .edob{opacity:0;visibility:hidden}
+.ed .edcg{position:relative;display:flex;align-items:center;gap:2px;height:32px}
+.ed .edring{position:absolute;left:0;top:0;width:32px;height:32px;border-radius:50%;box-sizing:border-box;border:2px solid #fff;pointer-events:none}
+.ed .edcd{position:relative;width:32px;height:32px;border-radius:50%;display:grid;place-items:center;cursor:pointer;flex:none}
+.ed .edcd i{width:18px;height:18px;border-radius:50%;box-shadow:inset 0 0 0 1px rgba(255,255,255,.18);pointer-events:none}
+.ed .edcu i{background:conic-gradient(#ff5a4e,#ffe14d,#5fcf98,#4da3ff,#a77bff,#ff5a4e)}
+.ed .edcu input{position:absolute;left:50%;top:100%;width:1px;height:1px;opacity:0;pointer-events:none;border:0;padding:0}
+.ed .edsz{display:flex;align-items:center;gap:10px;height:32px;padding:0 6px 0 2px}
+.ed .edszp{width:26px;height:26px;display:grid;place-items:center;flex:none}
+.ed .edszp i{border-radius:50%;background:#fff;box-shadow:0 0 0 1px rgba(255,255,255,.2)}
+.ed .edrg{-webkit-appearance:none;appearance:none;width:124px;height:4px;border-radius:2px;margin:0;outline:none;cursor:pointer;background:rgba(255,255,255,.16)}
+.ed .edrg::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;border-radius:50%;background:#fff;box-shadow:0 1px 4px rgba(0,0,0,.4)}
+.ed .edszv{width:24px;text-align:right;font-size:11.5px;font-weight:700;color:rgba(255,255,255,.55);font-variant-numeric:tabular-nums}
+.ed .edcl{font-size:12px;font-weight:650;color:rgba(255,255,255,.55);padding:0 10px 0 8px;white-space:nowrap}
+/* tooltip & toast */
+.ed .edtip{position:absolute;left:0;top:0;height:28px;padding:0 10px;border-radius:9px;display:flex;align-items:center;gap:7px;background:#2a2a2a;box-shadow:0 8px 24px rgba(0,0,0,.4),inset 0 0 0 1px rgba(255,255,255,.08);font-size:11.5px;font-weight:700;white-space:nowrap;opacity:0;visibility:hidden;pointer-events:none;z-index:4}
+.ed .edtip kbd{font:inherit;font-size:10.5px;font-weight:700;color:rgba(255,255,255,.55);background:rgba(255,255,255,.08);border-radius:5px;padding:1px 6px}
+.ed .edtoast{position:absolute;left:0;top:0;height:34px;padding:0 14px 0 11px;border-radius:12px;display:flex;align-items:center;gap:8px;background:rgba(26,26,26,.96);box-shadow:0 10px 30px rgba(0,0,0,.4),inset 0 0 0 1px rgba(255,255,255,.09);font-size:12px;font-weight:700;white-space:nowrap;opacity:0;visibility:hidden;pointer-events:none;z-index:4}
+.ed .edtoast i{width:8px;height:8px;border-radius:50%;background:#5fcf98}
+.ed .edtoast i.bad{background:#ff7a6b}
+/* crop */
+.ed .edcrop{position:absolute;left:0;top:0;display:none;opacity:0;box-shadow:0 0 0 9999px rgba(0,0,0,.52);outline:1.5px solid #fff;cursor:move;z-index:2}
+.ed .edgrid{position:absolute;inset:0;pointer-events:none;background:linear-gradient(90deg,transparent calc(33.33% - .5px),rgba(255,255,255,.35) calc(33.33% - .5px),rgba(255,255,255,.35) calc(33.33% + .5px),transparent calc(33.33% + .5px),transparent calc(66.66% - .5px),rgba(255,255,255,.35) calc(66.66% - .5px),rgba(255,255,255,.35) calc(66.66% + .5px),transparent calc(66.66% + .5px)),linear-gradient(180deg,transparent calc(33.33% - .5px),rgba(255,255,255,.35) calc(33.33% - .5px),rgba(255,255,255,.35) calc(33.33% + .5px),transparent calc(33.33% + .5px),transparent calc(66.66% - .5px),rgba(255,255,255,.35) calc(66.66% - .5px),rgba(255,255,255,.35) calc(66.66% + .5px),transparent calc(66.66% + .5px))}
+.ed .ech{position:absolute;width:14px;height:14px;margin:-7px 0 0 -7px;border-radius:4px;background:#fff;box-shadow:0 1px 4px rgba(0,0,0,.45);z-index:1}
+.ed .ech-tl{left:0;top:0;cursor:nwse-resize}.ed .ech-tr{left:100%;top:0;cursor:nesw-resize}
+.ed .ech-bl{left:0;top:100%;cursor:nesw-resize}.ed .ech-br{left:100%;top:100%;cursor:nwse-resize}
+.ed .ech-t{left:50%;top:0;width:22px;height:8px;margin:-4px 0 0 -11px;cursor:ns-resize}.ed .ech-b{left:50%;top:100%;width:22px;height:8px;margin:-4px 0 0 -11px;cursor:ns-resize}
+.ed .ech-l{left:0;top:50%;width:8px;height:22px;margin:-11px 0 0 -4px;cursor:ew-resize}.ed .ech-r{left:100%;top:50%;width:8px;height:22px;margin:-11px 0 0 -4px;cursor:ew-resize}
+/* text */
+.ed .edtx{position:absolute;left:0;top:0;margin:0;padding:0;font-weight:700;line-height:1.22;white-space:pre;outline:1.5px dashed rgba(255,255,255,.75);outline-offset:5px;min-width:6px;cursor:text;caret-color:currentColor;user-select:text;-webkit-user-select:text;text-shadow:0 1px 4px rgba(0,0,0,.35);z-index:2}
+/* the capsule thumbnail opens the editor */
+.st .ghost.edok{pointer-events:auto;cursor:pointer}
+.st .ghost.edok .edp{position:absolute;inset:0;display:grid;place-items:center;background:rgba(0,0,0,.42);color:#fff;opacity:0;transition:opacity .16s ease;pointer-events:none}
+.st .ghost.edok:hover .edp{opacity:1}
+.st .ghost.edok .edp svg{width:18px;height:18px;fill:currentColor}
+.st .ghost canvas.edth{position:absolute;left:0;top:0;max-width:none;transform-origin:0 0}

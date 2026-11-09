@@ -25,6 +25,7 @@
     groqPrompt: 'Перепиши весь текст с картинки точно как есть, сохраняя строки, абзацы и списки. Таблицы — в Markdown. Без комментариев, только текст.',
     groqProxy: '',
     // history & program
+    edTool: 'brush', edColor: '#ff5a4e', edSize: 6, edText: 28,
     histOn: true, histLimit: 200, startHidden: true, iconW: 'regular', accent: '#ebebea'
   };
   const T = window.__TAURI__;

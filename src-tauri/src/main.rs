@@ -547,6 +547,44 @@ async fn hist_copy(id: String) -> Result<(), String> {
   .map_err(|e| e.to_string())?
 }
 
+// the editor hands back the edited picture as PNG (base64): copy it or save it
+#[tauri::command]
+async fn ed_put(app: AppHandle, png: String, action: String, hist: Option<bool>) -> Result<Value, String> {
+  tauri::async_runtime::spawn_blocking(move || {
+    use base64::Engine;
+    let raw = png.trim();
+    let raw = raw.strip_prefix("data:image/png;base64,").unwrap_or(raw);
+    let bytes = base64::engine::general_purpose::STANDARD.decode(raw).map_err(|e| format!("Картинка повреждена: {e}"))?;
+    let img = image::load_from_memory_with_format(&bytes, image::ImageFormat::Png).map_err(|e| e.to_string())?.to_rgba8();
+    let (w, hh) = img.dimensions();
+    let mut b = img.into_raw();
+    for p in b.chunks_exact_mut(4) {
+      p.swap(0, 2);
+    }
+    let mut out = json!({ "w": w, "h": hh, "action": action });
+    let owner = h(&MAIN);
+    if action == "save" {
+      let path = save_file(w, hh, &b, &bytes)?;
+      out["path"] = json!(path.display().to_string());
+      if cfg::bool_("saveAlsoCopy", true) {
+        clip::set_image(owner, w, hh, &b, &bytes);
+      }
+    } else if !clip::set_image(owner, w, hh, &b, &bytes) {
+      return Err("Буфер обмена занят".into());
+    }
+    if hist.unwrap_or(false) && cfg::bool_("histOn", true) {
+      let th = cap::thumb(w, hh, &b, 720);
+      if hist::add(w, hh, &bytes, &th).is_some() {
+        let _ = app.emit_to("main", "hist", 0);
+      }
+    }
+    logx::log(&format!("editor {} {}x{}", out["action"].as_str().unwrap_or("?"), w, hh));
+    Ok(out)
+  })
+  .await
+  .map_err(|e| e.to_string())?
+}
+
 #[tauri::command]
 async fn hist_text(id: String, ai: bool) -> Result<String, String> {
   tauri::async_runtime::spawn_blocking(move || {
@@ -796,6 +834,10 @@ fn on_second(app: &AppHandle, args: Vec<String>) {
       }
       return;
     }
+    if let Some(s) = setup::arg_after(&args, "--test-ed") {
+      let _ = app.emit_to("ovl", "test_ed", s);
+      return;
+    }
     if let Some(s) = setup::arg_after(&args, "--test-sel") {
       let _ = app.emit_to("ovl", "test_sel", s);
       return;
@@ -827,7 +869,7 @@ fn run_app(ctx: tauri::Context<tauri::Wry>, autostarted: bool) {
     .invoke_handler(tauri::generate_handler![
       ovl_ready, ovl_hide, ovl_alive, ovl_pass, shot_do, card_hide, cfg_get, cfg_set, hk_record, set_paused, snap_now, hist_list, hist_del, hist_clear, hist_copy,
       hist_text, hist_save, hist_open, copy_text, open_path, open_save_dir, default_save_dir, name_preview, groq_test, show_settings, quit,
-      app_info, upd_check, upd_install, autostart, open_url, open_logs, log, win_ctl
+      app_info, upd_check, upd_install, autostart, open_url, open_logs, log, win_ctl, ed_put
     ])
     .setup(move |app| {
       let hnd = app.handle().clone();

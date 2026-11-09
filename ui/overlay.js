@@ -9,7 +9,7 @@
 
   // a page that cannot draw the frame closes itself instead of showing an empty window over the screen
   RS.listen('shot', e => start(e.payload).catch(err => { RS.log('ovl start ' + err); state = 'off'; RS.invoke('ovl_hide').catch(() => {}); }));
-  RS.listen('abort', () => { if (state === 'off') return; state = 'off'; busy = false; clearTimeout(radT); clearTimeout(capT); st.reset(); root.classList.remove('ready'); });
+  RS.listen('abort', () => { if (window.ED) ED.abort(); if (state === 'off') return; state = 'off'; busy = false; clearTimeout(radT); clearTimeout(capT); st.reset(); root.classList.remove('ready'); });
   setInterval(() => { if (state !== 'off') RS.invoke('ovl_alive').catch(() => {}); }, 1000);
   RS.listen('force', () => { root.classList.add('ready'); if (state === 'idle') st.intro(mx, my); });
   RS.listen('test_sel', e => {
@@ -19,8 +19,15 @@
     if (act) setTimeout(() => act_(act.trim()), 700);
   });
 
+  RS.listen('test_ed', e => {
+    const c = String(e.payload || '').trim();
+    RS.log('test_ed ' + c);
+    if (c === 'open') openEd(); else if (window.ED) ED.test(c);
+  });
+
   async function start(d) {
     D = d; busy = false;
+    if (window.ED) { ED.abort(); ED.reset(); }
     const c = { ...RS.DEF, ...(d.cfg || {}) };
     dpr = window.devicePixelRatio || 1;
     const W = innerWidth, H = innerHeight;
@@ -100,6 +107,7 @@
     const job = a !== 'none' ? RS.invoke('shot_do', { r: rpx(), action: a, card: false }).then(() => '', e => String(e || 'Не получилось')) : Promise.resolve('');
     await st.capOpen(c.capPos || 'place', monsCss(), a);
     const R = st._cap;
+    if (R && R.gh && window.ED) edHook(R);
     if (R && state === 'capsule') RS.log('capsule up for ' + (+C().capSec || 0) + ' s');
     const err = await job;
     if (err) { RS.log('shot_do ' + err); st.capDone(a, false, err.slice(0, 40)); }
@@ -116,7 +124,9 @@
     busy = true; clearTimeout(capT);
     st.capBusy(a);
     let ok = true, txt = '';
-    try { await RS.invoke('shot_do', { r: rpx(), action: a, card: false }); }
+    // after the editor the capsule buttons work with the edited picture
+    const ed = window.ED && ED.edited() && (a === 'copy' || a === 'save');
+    try { if (ed) await ED.put(a); else await RS.invoke('shot_do', { r: rpx(), action: a, card: false }); }
     catch (e) { ok = false; txt = String(e || '').slice(0, 40); RS.log('shot_do ' + e); }
     st.capDone(a, ok, ok ? '' : txt || 'Не получилось');
     busy = false;
@@ -130,6 +140,32 @@
   }
   st.onCap = a => a === 'close' ? capEnd('cross') : capDo(a);
   st.onCapHover = on => { capHov = on; if (on) clearTimeout(capT); else armCap(); };
+  // ---------------- the editor: a click on the capsule thumbnail
+  function edHook(R) {
+    const g = R.gh; if (g._ed) return; g._ed = 1;
+    g.classList.add('edok');
+    const b = document.createElement('div'); b.className = 'edp'; b.innerHTML = ED.penIcon(); g.appendChild(b);
+    g.addEventListener('pointerdown', e => e.stopPropagation());
+    g.addEventListener('pointerenter', () => st.onCapHover(true));
+    g.addEventListener('pointerleave', () => st.onCapHover(false));
+    g.addEventListener('click', e => { e.stopPropagation(); openEd(); });
+  }
+  async function openEd() {
+    const R = st._cap;
+    if (state !== 'capsule' || busy || !r || !R || !window.ED) return;
+    state = 'editor'; clearTimeout(capT);
+    let res = null;
+    try { res = await ED.open({ url: st.url, r, px: rpx(), T: R.T, mons: monsCss(), cfg: C(), dpr, thumb: R.gh }); }
+    catch (e) { RS.log('editor ' + e); }
+    if (state !== 'editor') return;
+    state = 'capsule';
+    capHov = !!((R.p && R.p.matches(':hover')) || R.gh.matches(':hover'));
+    if (res && res.changed && st._cap === R) {
+      st.capDone(res.copied ? 'copy' : 'save', true, res.copied ? 'Правки скопированы' : 'Правки сохранены');
+      const sm = R.inner && R.inner.querySelector('.ct small'); if (sm) sm.textContent = `${res.w} × ${res.h}`;
+    }
+    armCap();
+  }
 
   // ---------------- the round menu
   let radT = 0, radHov = false;
@@ -167,7 +203,7 @@
   st.onRadHover = on => { radHov = on; if (on) clearTimeout(radT); else armRad(); };
 
   root.addEventListener('pointerdown', e => {
-    if (state === 'off' || busy) return;
+    if (state === 'off' || state === 'editor' || busy) return;
     if (e.button === 2 && state !== 'radial' && state !== 'capsule') { e.preventDefault(); return state === 'adjust' ? backToIdle() : close(); }
     if (state === 'radial') { e.preventDefault(); return radEnd(); }
     if (state === 'capsule') { e.preventDefault(); return capEnd('click beside'); }
@@ -219,7 +255,7 @@
   addEventListener('contextmenu', e => e.preventDefault());
 
   addEventListener('keydown', e => {
-    if (state === 'off') return;
+    if (state === 'off' || state === 'editor') return;
     const k = e.key;
     // a hung close must never leave the dark screen behind
     if (state === 'closing') { if (k === 'Escape') close(); return; }
@@ -241,7 +277,7 @@
     if (k === 'Escape') { e.preventDefault(); return state === 'adjust' && e.shiftKey ? backToIdle() : close(); }
     if (state === 'idle' && (k === ' ' || k === 'Enter')) { r = clip(hov || under(mx, my)); return adjust(); }
     if (state === 'idle' && k.toLowerCase() === 'a' && e.ctrlKey) { e.preventDefault(); r = { x: 0, y: 0, w: innerWidth, h: innerHeight }; return adjust(); }
-    if (state === 'idle' && (k === 'l' || k === '��') && D && D.last) { r = clip({ x: sc(D.last.x), y: sc(D.last.y), w: sc(D.last.w), h: sc(D.last.h) }); return adjust(); }
+    if (state === 'idle' && (k === 'l' || k === 'д') && D && D.last) { r = clip({ x: sc(D.last.x), y: sc(D.last.y), w: sc(D.last.w), h: sc(D.last.h) }); return adjust(); }
     if (state !== 'adjust') return;
     if (k === 'Enter' || (e.ctrlKey && (k === 'c' || k === 'с'))) { e.preventDefault(); return act_('copy'); }
     if (e.ctrlKey && (k === 's' || k === 'ы')) { e.preventDefault(); return act_('save'); }
@@ -280,6 +316,7 @@
   }
 
   function close() {
+    if (window.ED) ED.abort();
     state = 'off'; busy = false; clearTimeout(radT); clearTimeout(capT);
     RS.invoke('ovl_hide').catch(() => {});
     setTimeout(() => { st.reset(); root.classList.remove('ready'); }, 30);

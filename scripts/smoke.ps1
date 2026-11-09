@@ -114,6 +114,42 @@ Log "capsule: clipboard has an image: $([System.Windows.Forms.Clipboard]::Contai
 [W]::keybd_event(0x1B, 0x01, 0, [UIntPtr]::Zero); Start-Sleep -Milliseconds 60; [W]::keybd_event(0x1B, 0x01, 2, [UIntPtr]::Zero)
 Start-Sleep -Milliseconds 900
 Log "capsule: overlay after Esc: $(Vis 'Retocker Snap — выделение')"
+
+# the editor: the capsule thumbnail flows into it, nothing inside may appear piece by piece
+Start-Process $exe -ArgumentList '--test-shot', 'area' | Out-Null
+Start-Sleep -Milliseconds 2200
+Start-Process $exe -ArgumentList '--test-sel', '300,200,640,380' | Out-Null
+Start-Sleep -Milliseconds 1300
+Shot "40-capsule-before-editor"
+Start-Process $exe -ArgumentList '--test-ed', 'open' | Out-Null
+$t0 = Get-Date
+for ($k = 0; $k -lt 14; $k++) { Shot ("41e-{0:D2}" -f $k) }
+Log "editor open burst: 14 frames in $([math]::Round(((Get-Date) - $t0).TotalMilliseconds)) ms"
+Start-Sleep -Milliseconds 500
+Shot "41-editor"
+Start-Process $exe -ArgumentList '--test-ed', 'draw' | Out-Null
+Start-Sleep -Milliseconds 3200
+Shot "42-editor-draw"
+Start-Process $exe -ArgumentList '--test-ed', 'crop' | Out-Null
+Start-Sleep -Milliseconds 2200
+Shot "43-editor-crop"
+Start-Process $exe -ArgumentList '--test-ed', 'undo' | Out-Null
+Start-Sleep -Milliseconds 1600
+Shot "44-editor-undo"
+Start-Process $exe -ArgumentList '--test-ed', 'redo' | Out-Null
+Start-Sleep -Milliseconds 1600
+Start-Process $exe -ArgumentList '--test-ed', 'close' | Out-Null
+$t0 = Get-Date
+for ($k = 0; $k -lt 12; $k++) { Shot ("45c-{0:D2}" -f $k) }
+Log "editor close burst: 12 frames in $([math]::Round(((Get-Date) - $t0).TotalMilliseconds)) ms"
+Start-Sleep -Milliseconds 500
+Shot "46-capsule-after-editor"
+$ci = [System.Windows.Forms.Clipboard]::GetImage()
+if ($ci) { Log "editor: clipboard image $($ci.Width)x$($ci.Height)" } else { Log "editor: clipboard has no image" }
+Log "editor: overlay visible $(Vis 'Retocker Snap — выделение')"
+[W]::keybd_event(0x1B, 0x01, 0, [UIntPtr]::Zero); Start-Sleep -Milliseconds 60; [W]::keybd_event(0x1B, 0x01, 2, [UIntPtr]::Zero)
+Start-Sleep -Milliseconds 900
+Log "editor: overlay after Esc: $(Vis 'Retocker Snap — выделение')"
 Start-Process $exe -ArgumentList '--test-cfg', 'capPos=bottom' | Out-Null
 Start-Sleep -Milliseconds 600
 Start-Process $exe -ArgumentList '--test-shot', 'full' | Out-Null

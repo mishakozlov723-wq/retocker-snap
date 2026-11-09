@@ -446,7 +446,7 @@ pub fn run_ui(m: Mode, ctx: tauri::Context<tauri::Wry>) {
       let init = format!("window.RA_SETUP = {};", json!({ "mode": if un { "uninstall" } else { "setup" } }));
       WebviewWindowBuilder::new(app, "setup", WebviewUrl::App("setup.html".into()))
         .title(if un { "Удаление Retocker Snap" } else { "Установка Retocker Snap" })
-        .inner_size(640.0, 490.0)
+        .inner_size(640.0, 540.0)
         .resizable(false)
         .maximizable(false)
         .center()

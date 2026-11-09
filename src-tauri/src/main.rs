@@ -34,6 +34,8 @@ static CARD: AtomicIsize = AtomicIsize::new(0);
 static MAIN: AtomicIsize = AtomicIsize::new(0);
 /// the overlay is up (or coming up): a second hotkey press is ignored
 static ACTIVE: AtomicBool = AtomicBool::new(false);
+// the round menu shows its own result, so its actions skip the corner card
+static NO_CARD: AtomicBool = AtomicBool::new(false);
 static SEQ: AtomicU64 = AtomicU64::new(0);
 /// the last area, in screen pixels («повторить прошлую область»)
 static LAST: Mutex<Option<cap::R>> = Mutex::new(None);
@@ -196,7 +198,7 @@ fn hide_card() {
 }
 
 fn show_card(app: &AppHandle, v: &Value) {
-  if !cfg::bool_("cardOn", true) {
+  if NO_CARD.swap(false, Ordering::SeqCst) || !cfg::bool_("cardOn", true) {
     return;
   }
   let Some(w) = app.get_webview_window("card") else { return };
@@ -386,7 +388,8 @@ fn ovl_hide() {
 }
 
 #[tauri::command]
-async fn shot_do(app: AppHandle, r: Rect, action: String) -> Result<Value, String> {
+async fn shot_do(app: AppHandle, r: Rect, action: String, card: Option<bool>) -> Result<Value, String> {
+  NO_CARD.store(card == Some(false), Ordering::SeqCst);
   let r = cap::R { x: r.x.round() as i32, y: r.y.round() as i32, w: r.w.round() as i32, h: r.h.round() as i32 };
   tauri::async_runtime::spawn_blocking(move || do_action(&app, r, &action)).await.map_err(|e| e.to_string())?
 }
@@ -708,6 +711,17 @@ fn on_second(app: &AppHandle, args: Vec<String>) {
   if dbg {
     if let Some(k) = setup::arg_after(&args, "--test-shot") {
       hook::test_fire(&k);
+      return;
+    }
+    if let Some(s) = setup::arg_after(&args, "--test-cfg") {
+      if let Some((k, v)) = s.split_once('=') {
+        let val: Value = serde_json::from_str(v).unwrap_or_else(|_| Value::String(v.to_string()));
+        let mut m = serde_json::Map::new();
+        m.insert(k.to_string(), val);
+        let o = Value::Object(m);
+        cfg::merge(&o);
+        let _ = app.emit("cfg", &o);
+      }
       return;
     }
     if let Some(s) = setup::arg_after(&args, "--test-sel") {

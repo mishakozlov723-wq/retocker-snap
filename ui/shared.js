@@ -15,6 +15,7 @@
     sizeLabel: 'corner', snapWin: true,
     // toolbar & after the shot
     toolbar: 'auto', instantAction: 'copy', barStyle: 'pill', barLabels: false,
+    radAct: 'copy', radSize: 132, radSec: 3, radLabels: false, radThumb: true, radSpin: 'fan',
     post: 'fly', postMs: 460, bounce: 25, flash: false,
     cardOn: true, cardPos: 'br', cardSec: 4, quickAction: 'copy', saveAlsoCopy: true, copyAlsoSave: false,
     // saving

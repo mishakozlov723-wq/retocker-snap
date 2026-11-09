@@ -19,14 +19,96 @@
   // ---------------------------------------------------------- building blocks
   const H = (title, sub) => `<div class="ph"><h1>${title}</h1>${sub ? `<span>${sub}</span>` : ''}</div>`;
   const sec = t => `<div class="sec">${t}</div>`;
-  const lbl = (t, s) => `<div class="lbl"><span class="t">${t}</span>${s ? `<small>${s}</small>` : ''}</div>`;
-  const sw = (k, t, s) => `<label class="row" data-row="${k}">${lbl(t, s)}<input type="checkbox" class="sw" data-k="${k}"></label>`;
-  const seg = (k, t, s, opts) => `<div class="row" data-row="${k}">${lbl(t, s)}<div class="seg" data-k="${k}">${opts.map(([v, n]) => `<button data-v="${esc(v)}">${n}</button>`).join('')}</div></div>`;
-  const rng = (k, t, s, min, max, step, unit) => `<div class="row col" data-row="${k}"><div class="rt">${lbl(t, s)}<span class="val" data-val="${k}" data-u="${unit || ''}"></span></div><input type="range" class="rng" data-k="${k}" min="${min}" max="${max}" step="${step}"></div>`;
+  // «?» next to a setting: hover it and a short explanation pops up
+  const HELP = {
+    "frameColor": "Цвет линии вокруг выделенной области.",
+    "frameW": "Толщина линии рамки. Тонкая — аккуратнее, толстая — лучше видно на пёстром фоне.",
+    "frameR": "Насколько скруглены углы рамки. 0 — острые углы.",
+    "frameGlow": "Мягкое свечение вокруг линии. Помогает видеть рамку на тёмном.",
+    "frameShadow": "Лёгкая тень под рамкой, чтобы она не терялась на светлом фоне.",
+    "handleSize": "Размер точек по углам — за них можно тянуть, чтобы поправить область.",
+    "dim": "Насколько темнеет экран вокруг выделения. 0 — не темнеет совсем.",
+    "dimColor": "Каким цветом закрашивается экран вокруг выделения.",
+    "blur": "Размывает всё вокруг выделения — так проще смотреть только на нужное.",
+    "gray": "Всё вокруг выделения становится чёрно-белым, а сама область остаётся цветной.",
+    "appear": "Как экран темнеет, когда нажимаешь PrintScreen.",
+    "appearMs": "Как быстро появляется затемнение. Меньше — быстрее.",
+    "snapWin": "Наведи на окно — оно подсветится целиком. Кликни — снимется всё окно ровно по краям.",
+    "cross": "Тонкие линии через весь экран от курсора — удобно ровнять область.",
+    "crossStyle": "Как выглядят линии перекрестия.",
+    "mag": "Круглое увеличительное стекло у курсора: видно каждый пиксель, удобно попадать точно.",
+    "magZoom": "Во сколько раз лупа увеличивает картинку.",
+    "magSize": "Насколько большая лупа.",
+    "magShape": "Круглая лупа или квадратная.",
+    "hex": "Под лупой показывается цвет пикселя (#RRGGBB) и координаты.",
+    "sizeLabel": "Где показывать размер области, например 640 × 480.",
+    "toolbar": "<b>Панель</b> — кнопки под областью. <b>Круглое меню</b> — рамка сворачивается в круг, вокруг кнопки. <b>Сразу действие</b> — без кнопок, снимок сразу копируется или сохраняется.",
+    "instantAction": "Что сделать со снимком, когда отпускаешь мышь.",
+    "barStyle": "Как выглядит панель с кнопками под выделением.",
+    "barLabels": "Писать названия рядом с иконками на панели.",
+    "radAct": "Что круглое меню делает само, пока раскрывается. Например, сразу копирует — а кнопками можно ещё сохранить или достать текст.",
+    "radSize": "Размер круга, в который сворачивается снимок.",
+    "radSec": "Через сколько секунд меню закроется само. Пока мышка на меню — не закроется. 0 — висит, пока не кликнешь мимо или не нажмёшь Esc.",
+    "radSpin": "<b>По очереди</b> — кнопки вылетают одна за другой. <b>Все сразу</b> — одновременно. <b>Дугой сни��у</b> — полукругом под снимком.",
+    "radThumb": "Внутри круга видно сам снимок. Выключи — будет тёмный круг с галочкой.",
+    "radLabels": "Подписи у кнопок вокруг круга. Без них подсказка появляется при наведении.",
+    "postMs": "Сколько длится анимация после снимка.",
+    "bounce": "Насколько анимация «пружинит». 0 — плавно, без отскока.",
+    "flash": "Короткая белая вспышка в момент снимка, как у фотоаппарата.",
+    "cardOn": "Маленькая карточка в углу экрана со снимком: можно сразу сохранить, открыть или перетащить.",
+    "cardPos": "В каком углу экрана появляется карточка.",
+    "cardSec": "Сколько секунд карточка висит. Наведи мышку — не исчезнет.",
+    "saveAlsoCopy": "Когда сохраняешь в файл, снимок ещё и попадает в буфер обмена.",
+    "copyAlsoSave": "Когда копируешь, снимок ещё и сохраняется в папку — ничего не потеряется.",
+    "quickAction": "Что делать со снимком всего экрана или окна — они снимаются без выделения.",
+    "saveFmt": "PNG — без потери качества. JPG — файл меньше. WebP — ещё меньше.",
+    "saveQ": "Качество JPG. Меньше — файл легче, но картинка хуже.",
+    "ocrLang": "Какой язык Windows использует, чтобы прочитать текст со снимка.",
+    "ocrFallback": "Если Windows не нашла текст, снимок отправится в Groq, и текст достанет ИИ.",
+    "groqKey": "Бесплатный ключ с console.groq.com. Нужен, чтобы доставать текст ч��рез ИИ.",
+    "groqModel": "Какая модель Groq читает картинку. Обычно менять не нужно.",
+    "groqProxy": "Если Groq у тебя не открывается — впиши прокси, например http://127.0.0.1:8080.",
+    "hk_area": "Выделить область мышкой.",
+    "hk_full": "Снять весь экран сразу, без выделения.",
+    "hk_window": "Снять окно, которое сейчас активно.",
+    "hk_text": "Выдели область — и текст с неё сразу окажется в буфере.",
+    "hk_last": "Снять ту же область, что и в прошлый раз.",
+    "delay": "Подождать перед снимком — успеешь открыть меню или подсказку.",
+    "trayClick": "Что происходит, когда кликаешь по иконке в трее.",
+    "histOn": "Хранить снимки в Истории, чтобы потом найти и скопировать снова.",
+    "histLimit": "Сколько последних снимков хранить. Старые удаляются сами.",
+    "startHidden": "При включении компьютера программа тихо сидит в трее, окно не открывается.",
+    "iconW": "Толщина линий у иконок в программе."
+    };
+  const lbl = (t, s, k) => `<div class="lbl"><span class="t">${t}${k && HELP[k] ? `<span class="q" data-tip="${k}">?</span>` : ''}</span>${s ? `<small>${s}</small>` : ''}</div>`;
+  {
+    const pop = document.createElement('div'); pop.className = 'qpop'; document.body.append(pop);
+    let cur = null, ht = 0;
+    const show = q => {
+      clearTimeout(ht); if (cur) cur.classList.remove('on'); cur = q; q.classList.add('on');
+      pop.innerHTML = HELP[q.dataset.tip] || ''; pop.classList.remove('on'); pop.style.left = '0px'; pop.style.top = '0px';
+      const r = q.getBoundingClientRect(), w = pop.offsetWidth, h = pop.offsetHeight;
+      let x = r.left + r.width / 2 - w / 2, y = r.bottom + 8, up = false;
+      if (y + h > innerHeight - 8) { y = r.top - h - 8; up = true; }
+      x = Math.max(8, Math.min(innerWidth - w - 8, x));
+      pop.style.left = x + 'px'; pop.style.top = y + 'px'; pop.classList.toggle('up', up);
+      pop.style.setProperty('--ax', (r.left + r.width / 2 - x) + 'px');
+      requestAnimationFrame(() => pop.classList.add('on'));
+    };
+    const hide = () => { ht = setTimeout(() => { pop.classList.remove('on'); if (cur) cur.classList.remove('on'); cur = null; }, 80); };
+    document.addEventListener('pointerover', e => { const q = e.target.closest && e.target.closest('.q'); if (q) show(q); });
+    document.addEventListener('pointerout', e => { const q = e.target.closest && e.target.closest('.q'); if (q && !q.contains(e.relatedTarget)) hide(); });
+    // the «?» sits inside a <label>: clicking it must not flip the switch
+    document.addEventListener('click', e => { if (e.target.closest && e.target.closest('.q')) { e.preventDefault(); e.stopPropagation(); } }, true);
+    document.addEventListener('scroll', () => { pop.classList.remove('on'); if (cur) cur.classList.remove('on'); cur = null; }, true);
+  }
+  const sw = (k, t, s) => `<label class="row" data-row="${k}">${lbl(t, s, k)}<input type="checkbox" class="sw" data-k="${k}"></label>`;
+  const seg = (k, t, s, opts) => `<div class="row" data-row="${k}">${lbl(t, s, k)}<div class="seg" data-k="${k}">${opts.map(([v, n]) => `<button data-v="${esc(v)}">${n}</button>`).join('')}</div></div>`;
+  const rng = (k, t, s, min, max, step, unit) => `<div class="row col" data-row="${k}"><div class="rt">${lbl(t, s, k)}<span class="val" data-val="${k}" data-u="${unit || ''}"></span></div><input type="range" class="rng" data-k="${k}" min="${min}" max="${max}" step="${step}"></div>`;
   const COLS = ['#ffffff', '#ebebea', '#7fb4f0', '#5fcf98', '#ffd166', '#ff7a6b', '#ff6ad5', '#b49cf0', '#000000'];
-  const col = (k, t, s, list) => `<div class="row col" data-row="${k}"><div class="rt">${lbl(t, s)}<span class="swn" data-val="${k}"></span></div><div class="sws" data-k="${k}">${(list || COLS).map(c => `<button class="swc" data-v="${c}" style="background:${c}" title="${c}"></button>`).join('')}<label class="swc pick" title="Свой цвет"><input type="color" data-pick="${k}"></label></div></div>`;
-  const inp = (k, t, s, ph, type) => `<div class="row col" data-row="${k}">${lbl(t, s)}<div class="fld"><input class="in" data-k="${k}" type="${type || 'text'}" placeholder="${esc(ph || '')}" spellcheck="false">${type === 'password' ? `<button class="eye" data-eye="${k}">${ic('eye')}</button>` : ''}</div></div>`;
-  const hk = (k, t, s) => `<div class="row" data-row="${k}">${lbl(t, s)}<button class="hk" data-hk="${k}"></button></div>`;
+  const col = (k, t, s, list) => `<div class="row col" data-row="${k}"><div class="rt">${lbl(t, s, k)}<span class="swn" data-val="${k}"></span></div><div class="sws" data-k="${k}">${(list || COLS).map(c => `<button class="swc" data-v="${c}" style="background:${c}" title="${c}"></button>`).join('')}<label class="swc pick" title="Свой цвет"><input type="color" data-pick="${k}"></label></div></div>`;
+  const inp = (k, t, s, ph, type) => `<div class="row col" data-row="${k}">${lbl(t, s, k)}<div class="fld"><input class="in" data-k="${k}" type="${type || 'text'}" placeholder="${esc(ph || '')}" spellcheck="false">${type === 'password' ? `<button class="eye" data-eye="${k}">${ic('eye')}</button>` : ''}</div></div>`;
+  const hk = (k, t, s) => `<div class="row" data-row="${k}">${lbl(t, s, k)}<button class="hk" data-hk="${k}"></button></div>`;
   const tiles = (k, n, list, sample) => `<div class="tiles" style="--n:${n}" data-k="${k}">${list.map(([v, name]) => `<button class="tile" data-v="${v}">${sample(v)}<span>${name}</span></button>`).join('')}</div>`;
 
   // ---------------------------------------------------------- pages
@@ -79,10 +161,17 @@
   const ACT = [['copy', 'Копировать'], ['save', 'Сохранить'], ['ocr', 'Текст']];
   P.after = () => H('После снимка', 'панель, анимация и карточка в углу') +
     sec('Панель с кнопками') +
-    seg('toolbar', 'Когда отпускаешь мышь', '', [['auto', 'Показать панель'], ['instant', 'Сразу действие']]) +
+    seg('toolbar', 'Когда отпускаешь мышь', '', [['auto', 'Панель'], ['radial', 'Круглое меню'], ['instant', 'Сразу действие']]) +
     seg('instantAction', 'Действие сразу', 'также по двойному клику внутри выделения', ACT) +
     seg('barStyle', 'Вид панели', '', [['pill', 'Капсула'], ['square', 'Прямая'], ['light', 'Светлая']]) +
     sw('barLabels', 'Подписи на кнопках', 'не только иконки') +
+    sec('Круглое меню') +
+    seg('radAct', 'Что сделать сразу', 'пока меню раскрывается', [['copy', 'Копировать'], ['save', 'Сохранить'], ['none', 'Ничего']]) +
+    rng('radSize', 'Размер круга', '', 90, 220, 2, 'px') +
+    rng('radSec', 'Само закроется через', '0 — висит, пока не кликнешь мимо', 0, 10, 1, ' с') +
+    seg('radSpin', 'Как выезжают кнопки', '', [['fan', 'По очереди'], ['all', 'Все сразу'], ['arc', 'Дугой снизу']]) +
+    sw('radThumb', 'Снимок внутри круга', 'иначе — тёмный круг с галочкой') +
+    sw('radLabels', 'Подписи у кнопок', 'не только иконки') +
     sec('Анимация снимка') +
     tiles('post', 4, OUT, v => `<span class="sm" style="--a:o-${v}"><span class="dm"></span><span class="gh"></span></span>`) +
     rng('postMs', 'Длительность', '', 150, 1200, 10, 'мс') +
@@ -163,7 +252,8 @@
   function deps() {
     const s = S(), dis = (k, off) => document.querySelectorAll(`[data-row="${k}"]`).forEach(r => r.classList.toggle('dis', !!off));
     dis('crossStyle', !s.cross); ['magZoom', 'magSize', 'magShape', 'hex'].forEach(k => dis(k, !s.mag));
-    dis('instantAction', s.toolbar !== 'instant'); ['barStyle', 'barLabels'].forEach(k => dis(k, s.toolbar === 'instant'));
+    dis('instantAction', s.toolbar !== 'instant'); ['barStyle', 'barLabels'].forEach(k => dis(k, s.toolbar !== 'auto'));
+    ['radAct', 'radSize', 'radSec', 'radSpin', 'radThumb', 'radLabels'].forEach(k => dis(k, s.toolbar !== 'radial'));
     ['cardPos', 'cardSec'].forEach(k => dis(k, !s.cardOn)); dis('saveQ', s.saveFmt !== 'jpg');
     dis('frameGlow', s.frame !== 'solid' && s.frame !== 'neon'); dis('handleSize', s.handles === 'none'); dis('histLimit', !s.histOn);
     ['postMs', 'bounce'].forEach(k => dis(k, s.post === 'none'));

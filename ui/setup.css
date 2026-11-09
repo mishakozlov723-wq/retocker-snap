@@ -1,10 +1,10 @@
 /* The installer and the uninstaller (ui/setup.html): a small 640×490 window without the system frame,
-   in the same style as the settings. The live capsule on top is the real engine in preview mode. */
+   in the same style as the settings. The live example on top is the real selection (fx.js) on a made-up desktop. */
 body.setup{background:var(--bg)}
 .win{display:flex;flex-direction:column;height:100vh}
 .win .tbar{flex:none;background:transparent;border-bottom:0}
 .body{flex:1;min-height:0;display:flex;flex-direction:column;padding:4px 26px 22px;position:relative}
-.stage{height:118px;flex:none;margin-bottom:16px;isolation:isolate}
+.stage{height:190px;flex:none;margin-bottom:14px;isolation:isolate;position:relative;overflow:hidden;border-radius:12px;box-shadow:0 0 0 1px var(--ln)}
 
 .scr{display:none;flex-direction:column;flex:1;min-height:0}
 .scr.on{display:flex;animation:scrIn .34s cubic-bezier(.2,.8,.2,1)}

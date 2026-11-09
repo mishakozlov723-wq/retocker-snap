@@ -11,6 +11,14 @@
     { sp: true },
     { id: 'close', icon: 'x', t: 'Отмена', k: 'Esc' }
   ];
+  // the round menu after the shot
+  const RADS = [
+    { id: 'copy', icon: 'copy', t: 'Копировать', done: 'Скопировано' },
+    { id: 'save', icon: 'floppy-disk', t: 'Сохранить', done: 'Сохранено' },
+    { id: 'ocr', icon: 'text-t', t: 'Текст', done: 'Текст скопирован' },
+    { id: 'ai', icon: 'sparkle', t: 'Через ИИ', done: 'Текст скопирован', ai: true },
+    { id: 'close', icon: 'x', t: 'Закрыть' }
+  ];
   const HS = ['tl', 't', 'tr', 'l', 'r', 'bl', 'b', 'br'];
 
   function make(root) {
@@ -24,6 +32,7 @@
     const bar = $e('div', 'bar', el);
     const flash = $e('div', 'flash', el);
     const hint = $e('div', 'hint', el);
+    const rad = $e('div', 'rad', el);
     const st = { el, W: 0, H: 0, dpr: 1, url: '', r: null, adj: false, c: {}, ai: false, onAct: null, cv: null, cvx: null };
 
     st.frame = (url, W, H, dpr) => {
@@ -174,6 +183,84 @@
       else bar.style.opacity = 1;
     };
 
+    // ---------------- the round menu: the frame turns into a circle, the buttons come out around it
+    rad.addEventListener('pointerdown', e => e.stopPropagation());
+    rad.addEventListener('click', e => { const b = e.target.closest('button'); if (b && st.onRad) st.onRad(b.dataset.a); });
+    rad.addEventListener('pointerenter', () => st.onRadHover && st.onRadHover(true));
+    rad.addEventListener('pointerleave', () => st.onRadHover && st.onRadHover(false));
+    const CHECK = '<svg viewBox="0 0 24 24"><path d="m5.5 12.5 4.2 4.2 8.8-9.2" pathLength="1"/></svg>';
+    st.radOpen = async () => {
+      const c = st.c, r = st.r; if (!r) return;
+      const D = Math.max(80, c.radSize || 132), RO = D / 2 + 34, M = RO + 30;
+      const ccx = Math.max(M, Math.min(st.W - M, r.x + r.w / 2)), ccy = Math.max(M, Math.min(st.H - M, r.y + r.h / 2));
+      fr.style.visibility = 'hidden'; lab.classList.remove('on'); st.bar(false); mag.classList.remove('on'); el.classList.remove('crs');
+      el.classList.add('nohole');
+      // the picture: one box around both the selection and the circle, clipped from the one to the other
+      const bx = Math.min(r.x, ccx - D / 2), by = Math.min(r.y, ccy - D / 2), bx2 = Math.max(r.x + r.w, ccx + D / 2), by2 = Math.max(r.y + r.h, ccy + D / 2);
+      const gh = $e('div', 'ghost rgh', rad), gi = $e('img', '', gh);
+      gi.src = st.url; gi.style.width = st.W + 'px'; gi.style.height = st.H + 'px'; gi.style.transform = `translate(${-bx}px,${-by}px)`;
+      Object.assign(gh.style, { left: bx + 'px', top: by + 'px', width: bx2 - bx + 'px', height: by2 - by + 'px' });
+      const from = `inset(${r.y - by}px ${bx2 - r.x - r.w}px ${by2 - r.y - r.h}px ${r.x - bx}px round ${c.frameR}px)`;
+      const to = `inset(${ccy - D / 2 - by}px ${bx2 - ccx - D / 2}px ${by2 - ccy - D / 2}px ${ccx - D / 2 - bx}px round ${D / 2}px)`;
+      gh.style.clipPath = to;
+      const ms = Math.max(200, c.postMs * 1.1), b = 1 + Math.min(.6, (c.bounce || 0) / 100);
+      if (gh.animate) gh.animate([{ clipPath: from }, { clipPath: to }], { duration: ms, easing: `cubic-bezier(.3,${b.toFixed(2)},.45,1)` });
+      // a timer, not .finished: a clip-path animation may never report the end on some machines
+      const morph = new Promise(res => setTimeout(res, ms * .8));
+      if (c.flash) RS.anim(flash, { opacity: [0, .8, 0] }, { duration: .26 });
+      // the middle and the ring of buttons
+      const mid = $e('div', 'rc' + (c.radThumb ? ' th' : ''), rad);
+      Object.assign(mid.style, { left: ccx - D / 2 + 'px', top: ccy - D / 2 + 'px', width: D + 'px', height: D + 'px' });
+      mid.innerHTML = `<div class="rcb"></div><div class="rci"><span class="rk">${CHECK}</span><b></b></div><div class="rsp"></div>`;
+      const list = RADS.filter(a => !a.ai || st.ai);
+      const n = list.length, start = -90, step = c.radSpin === 'arc' ? Math.min(42, 300 / n) : 360 / n;
+      const a0 = c.radSpin === 'arc' ? start - step * (n - 1) / 2 + 180 : start;
+      const btns = list.map((a, i) => {
+        const ang = (a0 + step * i) * Math.PI / 180, x = ccx + Math.cos(ang) * RO, y = ccy + Math.sin(ang) * RO;
+        const btn = $e('button', 'ro' + (a.id === 'close' ? ' cl' : ''), rad);
+        btn.dataset.a = a.id;
+        const cs = Math.cos(ang), sn = Math.sin(ang), lt = `translate:calc(-50% + ${(cs * 50).toFixed(1)}% + ${(cs * 28).toFixed(1)}px) calc(-50% + ${(sn * 50).toFixed(1)}% + ${(sn * 28).toFixed(1)}px)`;
+        btn.innerHTML = RS.ic(a.icon) + (c.radLabels ? `<span class="rl" style="${lt}">${a.t}</span>` : `<span class="tt">${a.t}</span>`);
+        btn.style.left = x - 20 + 'px'; btn.style.top = y - 20 + 'px';
+        btn._d = { x: ccx - x, y: ccy - y };
+        return btn;
+      });
+      st._rad = { mid, btns, gh, ccx, ccy, D };
+      rad.classList.add('on');
+      await morph;
+      RS.anim(mid, { opacity: [0, 1], scale: [.92, 1] }, RS.spring(260, 30));
+      await Promise.all(btns.map((btn, i) => new Promise(res => setTimeout(() => {
+        RS.anim(btn, { x: [btn._d.x, 0], y: [btn._d.y, 0], scale: [.3, 1], opacity: [0, 1] }, RS.spring(380, c.bounce)).then(res);
+      }, c.radSpin === 'all' ? 0 : i * 38))));
+    };
+    st.radBusy = id => {
+      const R = st._rad; if (!R) return;
+      R.mid.classList.add('busy'); R.mid.classList.remove('ok', 'bad');
+      R.btns.forEach(b => b.classList.toggle('act', b.dataset.a === id));
+    };
+    st.radDone = (id, ok, text) => {
+      const R = st._rad; if (!R) return;
+      const a = RADS.find(x => x.id === id) || {};
+      R.mid.classList.remove('busy');
+      R.mid.querySelector('b').textContent = text || (ok ? a.done || 'Готово' : 'Не получилось');
+      R.mid.classList.remove('ok', 'bad'); void R.mid.offsetWidth;
+      R.mid.classList.add(ok ? 'ok' : 'bad');
+      R.btns.forEach(b => { b.classList.remove('act'); if (ok && b.dataset.a === id) b.classList.add('dn'); });
+      RS.anim(R.mid.querySelector('.rci'), { scale: [.7, 1], opacity: [0, 1] }, RS.spring(320, 45));
+    };
+    st.radClose = async () => {
+      const R = st._rad; if (!R) return;
+      st._rad = null;
+      const c = st.c, sp = RS.spring(Math.max(180, c.postMs * .6), 0);
+      await Promise.all(R.btns.map(b => RS.anim(b, { x: [0, b._d.x], y: [0, b._d.y], scale: [1, .3], opacity: [1, 0] }, { duration: .18 })));
+      await Promise.all([
+        RS.anim(R.mid, { scale: [1, .5], opacity: [1, 0] }, sp),
+        RS.anim(R.gh, { scale: [1, .5], opacity: [1, 0] }, sp),
+        RS.anim(shade, { opacity: [1, 0] }, { duration: .22 })
+      ]);
+      rad.classList.remove('on'); rad.innerHTML = '';
+    };
+
     st.hint = html => { if (html) hint.innerHTML = html; hint.classList.toggle('on', !!html); };
 
     st.intro = (cxp, cyp) => {
@@ -233,6 +320,7 @@
       el.classList.add('nohole'); el.classList.remove('crs');
       fr.style.visibility = 'hidden'; fr.classList.remove('adj', 'hov');
       lab.classList.remove('on'); mag.classList.remove('on'); st.bar(false); st.hint('');
+      st._rad = null; rad.classList.remove('on'); rad.innerHTML = '';
       shade.style.opacity = ''; shade.style.transform = ''; flash.style.opacity = 0;
       for (const a of el.getAnimations ? el.getAnimations({ subtree: true }) : []) { try { a.cancel(); } catch (e) {} }
       el.querySelectorAll('.ghost').forEach(x => x.remove());
@@ -323,6 +411,21 @@
         if (!ok()) return;
         st.cursor(B.x, B.y, false);
         st.select({ x: A.x, y: A.y, w: B.x - A.x, h: B.y - A.y }, true);
+        if (c.toolbar === 'radial') {
+          cur.style.opacity = 0;
+          await st.radOpen();
+          if (!ok()) return;
+          await sleep(350);
+          const first = c.radAct && c.radAct !== 'none' ? c.radAct : 'save';
+          st.radBusy(first); await sleep(260); st.radDone(first, true);
+          await sleep(o.outro ? 1800 : 2400);
+          if (!ok()) return;
+          await st.radClose();
+          if (o.onDone) o.onDone();
+          await sleep(700);
+          cur.style.opacity = '';
+          continue;
+        }
         if (c.toolbar !== 'instant') st.bar(true);
         await sleep(o.outro ? 1100 : 2200);
         if (!ok()) return;
@@ -344,5 +447,5 @@
     };
   }
 
-  window.FX = { make, desktop, demo, ACTS };
+  window.FX = { make, desktop, demo, ACTS, RADS };
 })();

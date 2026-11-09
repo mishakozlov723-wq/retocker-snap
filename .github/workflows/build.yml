@@ -17,7 +17,7 @@ jobs:
   windows:
     runs-on: windows-latest
     env:
-      VER: 0.1.${{ github.run_number }}
+      VER: 0.2.${{ github.run_number }}
     steps:
       - uses: actions/checkout@v4
 

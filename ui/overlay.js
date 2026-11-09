@@ -64,12 +64,50 @@
     st.cursor(0, 0, false);
     if (D && D.mode === 'text') return act_('ocr');
     if (C().toolbar === 'instant') return act_(C().instantAction || 'copy');
+    if (C().toolbar === 'radial') return radial();
     st.bar(true);
   }
 
+  // ---------------- the round menu
+  let radT = 0, radHov = false;
+  const rpx = () => ({ x: P(r.x), y: P(r.y), w: Math.max(1, P(r.x + r.w) - P(r.x)), h: Math.max(1, P(r.y + r.h) - P(r.y)) });
+  async function radial() {
+    state = 'radial'; busy = true; radHov = false;
+    st.cursor(0, 0, false);
+    await st.radOpen();
+    busy = false;
+    const a = C().radAct;
+    if (a && a !== 'none') await radDo(a); else armRad();
+  }
+  function armRad() {
+    clearTimeout(radT);
+    const s = +C().radSec || 0;
+    if (s > 0 && !radHov && state === 'radial') radT = setTimeout(radEnd, s * 1000);
+  }
+  async function radDo(a) {
+    if (busy || state !== 'radial' || !r) return;
+    busy = true; clearTimeout(radT);
+    st.radBusy(a);
+    let ok = true, txt = '';
+    try { await RS.invoke('shot_do', { r: rpx(), action: a, card: false }); }
+    catch (e) { ok = false; txt = String(e || '').slice(0, 40); RS.log('shot_do ' + e); }
+    st.radDone(a, ok, ok ? '' : txt || 'Не получилось');
+    busy = false;
+    armRad();
+  }
+  async function radEnd() {
+    if (state !== 'radial') return;
+    state = 'closing'; clearTimeout(radT);
+    await st.radClose();
+    close();
+  }
+  st.onRad = a => a === 'close' ? radEnd() : radDo(a);
+  st.onRadHover = on => { radHov = on; if (on) clearTimeout(radT); else armRad(); };
+
   root.addEventListener('pointerdown', e => {
     if (state === 'off' || busy) return;
-    if (e.button === 2) { e.preventDefault(); return state === 'adjust' ? backToIdle() : close(); }
+    if (e.button === 2 && state !== 'radial') { e.preventDefault(); return state === 'adjust' ? backToIdle() : close(); }
+    if (state === 'radial') { e.preventDefault(); return radEnd(); }
     if (e.button !== 0) return;
     root.setPointerCapture(e.pointerId);
     const x = e.clientX, y = e.clientY;
@@ -120,6 +158,13 @@
   addEventListener('keydown', e => {
     if (state === 'off' || busy) return;
     const k = e.key;
+    if (state === 'radial') {
+      if (k === 'Escape' || k === 'Enter') { e.preventDefault(); return radEnd(); }
+      if (e.ctrlKey && (k === 'c' || k === 'с')) { e.preventDefault(); return radDo('copy'); }
+      if (e.ctrlKey && (k === 's' || k === 'ы')) { e.preventDefault(); return radDo('save'); }
+      if (k === 't' || k === 'T' || k === 'е' || k === 'Е') { e.preventDefault(); return radDo(e.shiftKey && st.ai ? 'ai' : 'ocr'); }
+      return;
+    }
     if (k === 'Escape') { e.preventDefault(); return state === 'adjust' && e.shiftKey ? backToIdle() : close(); }
     if (state === 'idle' && (k === ' ' || k === 'Enter')) { r = clip(hov || under(mx, my)); return adjust(); }
     if (state === 'idle' && k.toLowerCase() === 'a' && e.ctrlKey) { e.preventDefault(); r = { x: 0, y: 0, w: innerWidth, h: innerHeight }; return adjust(); }
@@ -142,6 +187,7 @@
   function backToIdle() { state = 'idle'; r = null; st.select({ x: 0, y: 0, w: 0, h: 0 }, false); st.bar(false); idleMove(); }
 
   async function act_(action) {
+    if (state === 'radial') return radDo(action);
     if (busy || !r || r.w < 1 || r.h < 1) return;
     busy = true; document.body.classList.add('busy');
     const c = C();
@@ -160,7 +206,7 @@
   }
 
   function close() {
-    state = 'off'; busy = false;
+    state = 'off'; busy = false; clearTimeout(radT);
     RS.invoke('ovl_hide').catch(() => {});
     setTimeout(() => { st.reset(); root.classList.remove('ready'); }, 30);
   }

@@ -4,7 +4,7 @@
 // In a plain browser (no Tauri) it runs on made-up data, so the look can be checked anywhere:
 // setup.html?mode=uninstall · ?old · ?fail · ?auto
 (() => {
-const RA = window.RA, { esc } = RA;
+const RA = window.RS, { esc } = RA;
 const $ = s => document.querySelector(s);
 const h = (tag, cls, html) => { const e = document.createElement(tag); if (cls) e.className = cls; if (html != null) e.innerHTML = html; return e; };
 const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -49,7 +49,7 @@ const MOCK = {
   fs_mkdir: ({ path, name }) => { const k = trim(path), p = join(k, name); if (FAKE[p]) throw 'Такая папка уже есть'; FAKE[k].push(name); FAKE[p] = []; return p; },
   fs_check: ({ path }) => ({ ok: /^[A-Z]:\\./i.test(path), writable: !/^C:\\(Program Files|Windows)|^C:\\[^\\]+$/i.test(path), free: 87.4e9, exists: false }),
   setup_run: async ({ opts }) => {
-    for (const [p, t] of [[6, 'Закрываю Retocker Snap…'], [18, 'Убираю прошлую версию…'], [45, 'Копирую программу…'], [70, 'Создаю ярлыки…'], [86, 'Записываю в Windows…'], [100, 'Готово']]) { prog({ p, t }); await sleep(Q.has('slow') ? 1200 : 450); }
+    for (const [p, t] of [[6, 'Закрываю Retocker Snap…'], [18, 'Убираю прошлую версию…'], [45, 'Копирую программу…'], [70, 'Создаю ярлыки…'], [86, 'За��исываю в Windows…'], [100, 'Готово']]) { prog({ p, t }); await sleep(Q.has('slow') ? 1200 : 450); }
     if (Q.has('fail')) throw 'Не получилось скопировать программу: Отказано в доступе. (os error 5)';
     return join(opts.dir, 'retocker-snap.exe');
   },
@@ -62,22 +62,12 @@ const msg = e => String((e && e.message) || e || 'ошибка');
 const toastEl = $('#toast');
 function toast(t, ms = 2600) { toastEl.textContent = t; toastEl.classList.add('on'); clearTimeout(toastEl._t); toastEl._t = setTimeout(() => toastEl.classList.remove('on'), ms); }
 
-/* ---------------- the live capsule on top: the real engine, playing «запись → распознаю → готово» */
-let cap = null, loopT = 0, looping = false;
-window.RA_ENV = {
-  mode: 'preview', stage: $('#pv'), task: 0, top: 8, observe: true, ignore: '',
-  onChange: () => {}, copy: async () => true, onDemoInsert: () => {},
-  ready: api => { cap = api; loop(true); }
-};
-function loop(on) {
-  clearTimeout(loopT); looping = on;
-  if (!on || !cap) return;
-  const tick = () => {
-    if (!looping) return;
-    if (!document.hidden && cur !== 'pick' && cap.state === 'idle') cap.preview('morph');
-    loopT = setTimeout(tick, 6000);
-  };
-  loopT = setTimeout(tick, 700);
+/* ---------------- the live example on top: the real selection, the same as in the settings */
+let dm = null;
+function demo(on) {
+  if (!on) { if (dm) { dm.stop(); dm = null; } return; }
+  if (dm || !window.FX) return;
+  try { dm = FX.demo($('#pv'), () => RA.S, { outro: true }); } catch (e) { dm = null; }
 }
 
 /* ---------------- screens */
@@ -210,8 +200,8 @@ async function uninstall() {
     prog({ p: 100, t: 'Готово' }); await sleep(380);
     $('#udTxt').textContent = wipe ? 'Программа, настройки и ключ удалены.' : 'Программа удалена. Настройки и ключ Groq остались — если установишь снова, всё будет как было.';
     show('undone');
-    // the capsule goes away too
-    if (cap) { loop(false); cap.toIdle(); setTimeout(() => cap.opt({ idle: 'hidden' }), 500); }
+    // the example goes away too
+    demo(false);
   } catch (e) {
     $('#eTitle').textContent = 'Не получилось удалить'; $('#eTxt').textContent = msg(e); show('err');
   }
@@ -261,6 +251,7 @@ async function auto() {
     paintDir();
     show('welcome');
   }
+  requestAnimationFrame(() => demo(!UN));
   if (info.auto) auto();
 })();
 })();

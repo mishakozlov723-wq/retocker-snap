@@ -62,6 +62,22 @@ Log "card visible: $(Vis 'Retocker Snap — снимок')"
 $img = [System.Windows.Forms.Clipboard]::ContainsImage()
 Log "clipboard has an image: $img"
 
+# the round menu: switch it on, select an area, look at it, close it, switch back
+Start-Process $exe -ArgumentList '--test-cfg', 'toolbar=radial' | Out-Null
+Start-Sleep -Milliseconds 800
+Start-Process $exe -ArgumentList '--test-shot', 'area' | Out-Null
+Start-Sleep -Milliseconds 2200
+Start-Process $exe -ArgumentList '--test-sel', '300,200,640,380' | Out-Null
+Start-Sleep -Milliseconds 1600
+Shot "37-radial"
+Log "radial: card visible $(Vis 'Retocker Snap — снимок') (should be False)"
+[W]::keybd_event(0x1B, 0x01, 0, [UIntPtr]::Zero); Start-Sleep -Milliseconds 60; [W]::keybd_event(0x1B, 0x01, 2, [UIntPtr]::Zero)
+Start-Sleep -Milliseconds 900
+Shot "38-radial-closed"
+Log "overlay after Esc: $(Vis 'Retocker Snap — выделение')"
+Start-Process $exe -ArgumentList '--test-cfg', 'toolbar=auto' | Out-Null
+Start-Sleep -Milliseconds 500
+
 # full screen straight away
 Start-Process $exe -ArgumentList '--test-shot', 'full' | Out-Null
 Start-Sleep -Milliseconds 3000
@@ -75,4 +91,16 @@ Log "---- app log"
 if (Test-Path $logf) { Get-Content $logf | ForEach-Object { Log $_ } } else { Log "no log at $logf" }
 if ($p.HasExited) { Log "APP EXITED, code $($p.ExitCode)"; exit 1 }
 Stop-Process -Id $p.Id -Force
+Start-Sleep 2
+
+# the installer: a copy named «…Setup…» opens the installer window. Only look at it, do not install.
+$tmp = Join-Path $env:TEMP 'snap-setup-test'
+New-Item -ItemType Directory -Force $tmp | Out-Null
+$setup = Join-Path $tmp 'Retocker-Snap-Setup.exe'
+Copy-Item $exe $setup -Force
+$sp = Start-Process $setup -PassThru
+Start-Sleep 7
+Shot "40-setup"
+Log "installer visible: $(Vis 'Установка Retocker Snap')"
+if (-not $sp.HasExited) { Stop-Process -Id $sp.Id -Force }
 Log "ok"

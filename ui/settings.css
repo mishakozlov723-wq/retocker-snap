@@ -376,3 +376,14 @@ svg.ph,.ph-i svg{fill:currentColor;stroke:none}
 .nprev b{color:var(--tx)}
 .rng-row{display:flex;align-items:center;gap:12px}
 .rng-row .rng{flex:1}
+
+/* «?» tips */
+.lbl .t .q{margin-left:7px;vertical-align:1px}
+.q{width:15px;height:15px;border-radius:50%;display:inline-grid;place-items:center;font-size:10px;font-weight:800;line-height:1;color:var(--tx3,rgba(255,255,255,.4));box-shadow:inset 0 0 0 1.2px rgba(255,255,255,.2);cursor:help;transition:color .12s,box-shadow .12s,transform .18s cubic-bezier(.3,1.6,.5,1)}
+.q:hover,.q.on{color:#fff;box-shadow:inset 0 0 0 1.2px rgba(255,255,255,.65);transform:scale(1.12)}
+.qpop{position:fixed;z-index:90;max-width:280px;width:max-content;background:#262626;color:rgba(255,255,255,.78);font-size:12px;font-weight:550;line-height:1.5;padding:9px 12px;border-radius:10px;box-shadow:0 0 0 1px rgba(255,255,255,.1),0 16px 44px rgba(0,0,0,.55);pointer-events:none;opacity:0;transform:translateY(-4px) scale(.97);transform-origin:var(--ax,50%) 0;transition:opacity .14s,transform .2s cubic-bezier(.2,.9,.3,1.15)}
+.qpop.up{transform-origin:var(--ax,50%) 100%;transform:translateY(4px) scale(.97)}
+.qpop.on{opacity:1;transform:none}
+.qpop b{color:#fff;font-weight:750}
+.qpop::before{content:'';position:absolute;top:-5px;left:calc(var(--ax,50%) - 5px);width:10px;height:10px;background:#262626;transform:rotate(45deg);box-shadow:-1px -1px 0 0 rgba(255,255,255,.1)}
+.qpop.up::before{top:auto;bottom:-5px;box-shadow:1px 1px 0 0 rgba(255,255,255,.1)}

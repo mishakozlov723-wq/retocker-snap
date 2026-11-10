@@ -206,9 +206,8 @@ fn ovl_guard(app: AppHandle) {
       };
       if want != thru {
         thru = want;
-        if let Some(w) = app.get_webview_window("ovl") {
-          let _ = w.set_ignore_cursor_events(want);
-        }
+        // our own click-through: set_ignore_cursor_events rebuilds every window style and the overlay vanishes
+          win::set_clickthrough(ov, want);
       }
       if vis {
         let stale = now_ms().saturating_sub(ALIVE.load(Ordering::SeqCst)) > 4000;

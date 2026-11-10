@@ -50,6 +50,8 @@ struct St {
   rec_until: Option<Instant>,
   paused: bool,
   async_ok: bool,
+  /// the capsule is up and the keyboard went back to the app: one Esc still closes the capsule
+  cap_esc: bool,
 }
 
 static ST: OnceLock<Mutex<St>> = OnceLock::new();
@@ -204,6 +206,10 @@ pub fn set_record(on: bool) {
 pub fn set_paused(on: bool) {
   st().paused = on;
 }
+/// the capsule is up without the keyboard: catch one plain Esc for it (sent as the hotkey "cap_esc")
+pub fn set_cap_esc(on: bool) {
+  st().cap_esc = on;
+}
 
 fn key_in(vk: u16, up: bool) -> INPUT {
   let mut flags = KEYBD_EVENT_FLAGS(0);
@@ -290,6 +296,13 @@ fn handle(down: bool, kb: &KBDLLHOOKSTRUCT) -> bool {
   }
   if s.paused || !down || bit != 0 {
     return false;
+  }
+  if s.cap_esc && vk == 0x1B && s.held == 0 {
+    s.cap_esc = false;
+    s.swallow.push(vk);
+    drop(s);
+    send(Ev::Hk("cap_esc".into()));
+    return true;
   }
   let held = s.held;
   let hit = s.combos.iter().find(|c| c.key == vk && mods_match(held, &c.req)).cloned();

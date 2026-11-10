@@ -11,6 +11,8 @@
   RS.listen('shot', e => start(e.payload).catch(err => { RS.log('ovl start ' + err); state = 'off'; RS.invoke('ovl_hide').catch(() => {}); }));
   RS.listen('abort', () => { if (window.ED) ED.abort(); if (state === 'off') return; state = 'off'; busy = false; clearTimeout(radT); clearTimeout(capT); st.reset(); root.classList.remove('ready'); });
   setInterval(() => { if (state !== 'off') RS.invoke('ovl_alive').catch(() => {}); }, 1000);
+  // Esc while the capsule is up and the keyboard is back in the app (caught by the keyboard hook)
+  RS.listen('cap_esc', () => { if (state === 'capsule') capEnd('key Escape'); });
   RS.listen('force', () => { root.classList.add('ready'); if (state === 'idle') st.intro(mx, my); });
   RS.listen('test_sel', e => {
     const [x, y, w, h, act] = String(e.payload || '').split(',');
@@ -101,12 +103,34 @@
 
   // ---------------- the capsule
   let capT = 0, capHov = false;
+  // while the capsule is up only the capsule takes clicks, everything else goes through to the apps below.
+  // on: the capsule's box (or nothing yet: every click goes through); off: the overlay takes all clicks
+  function capPass(on) {
+    let q = null;
+    if (on) {
+      const R = st._cap; let b = null;
+      for (const e of R ? [R.p, R.gh] : []) {
+        if (!e) continue;
+        const x = e.getBoundingClientRect();
+        if (!x.width || !x.height) continue;
+        b = b ? { l: Math.min(b.l, x.left), t: Math.min(b.t, x.top), r: Math.max(b.r, x.right), b: Math.max(b.b, x.bottom) }
+          : { l: x.left, t: x.top, r: x.right, b: x.bottom };
+      }
+      const m = 10;
+      q = b ? { x: (b.l - m) * dpr, y: (b.t - m) * dpr, w: (b.r - b.l + 2 * m) * dpr, h: (b.b - b.t + 2 * m) * dpr } : { x: -1000, y: -1000, w: 0, h: 0 };
+    }
+    return RS.invoke('ovl_pass', { r: q }).catch(() => {});
+  }
   async function capsule() {
     state = 'capsule'; busy = true; capHov = false;
     st.cursor(0, 0, false);
+    // the clicks and the keyboard go back to the apps right away, not after the capsule animation
+    capPass(true);
+    RS.invoke('ovl_focus', { on: false }).catch(() => {});
     const c = C(), a = c.capAct || 'copy';
     const job = a !== 'none' ? RS.invoke('shot_do', { r: rpx(), action: a, card: false }).then(() => '', e => String(e || 'Не получилось')) : Promise.resolve('');
     await st.capOpen(c.capPos || 'place', monsCss(), a);
+    if (state === 'capsule') capPass(true);
     const R = st._cap;
     if (R && R.gh && window.ED) edHook(R);
     if (R && state === 'capsule') RS.log('capsule up for ' + (+C().capSec || 0) + ' s');
@@ -155,11 +179,16 @@
     const R = st._cap;
     if (state !== 'capsule' || busy || !r || !R || !window.ED) return;
     state = 'editor'; clearTimeout(capT);
+    // the editor needs the whole screen and the keyboard
+    await capPass(false);
+    await RS.invoke('ovl_focus', { on: true }).catch(() => {});
     let res = null;
     try { res = await ED.open({ url: st.url, r, px: rpx(), T: R.T, mons: monsCss(), cfg: C(), dpr, thumb: R.gh }); }
     catch (e) { RS.log('editor ' + e); }
     if (state !== 'editor') return;
     state = 'capsule';
+    capPass(true);
+    RS.invoke('ovl_focus', { on: false }).catch(() => {});
     capHov = !!((R.p && R.p.matches(':hover')) || R.gh.matches(':hover'));
     if (res && res.changed && st._cap === R) {
       st.capDone(res.copied ? 'copy' : 'save', true, res.copied ? 'Правки скопированы' : 'Правки сохранены');
@@ -226,7 +255,8 @@
     if (state === 'off' || state === 'editor' || busy) return;
     if (e.button === 2 && state !== 'radial' && state !== 'capsule') { e.preventDefault(); return state === 'adjust' ? backToIdle() : close(); }
     if (state === 'radial') { e.preventDefault(); return radEnd(); }
-    if (state === 'capsule') { e.preventDefault(); return capEnd('click beside'); }
+    // a click beside the capsule goes to the app below; the capsule leaves on its timer or by its cross
+    if (state === 'capsule') return;
     if (e.button !== 0) return;
     root.setPointerCapture(e.pointerId);
     const x = e.clientX, y = e.clientY;

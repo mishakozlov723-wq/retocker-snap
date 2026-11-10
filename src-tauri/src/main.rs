@@ -101,6 +101,8 @@ fn start_overlay_x(app: &AppHandle, mode: &str, extra: Value) {
   if ACTIVE.swap(true, Ordering::SeqCst) {
     return;
   }
+  // where the keyboard goes back to once the shot is taken
+  win::remember_front();
   hide_card();
   if mode != "edit" {
     delay();
@@ -466,9 +468,29 @@ fn ovl_ready(n: u64) {
   }
 }
 
+/// the capsule: off = the keyboard goes back to the app the user was writing in (Esc still closes the capsule);
+/// on = the editor opened from the capsule takes it again
+#[tauri::command]
+fn ovl_focus(on: bool) {
+  let ov = h(&OVL);
+  if on {
+    hook::set_cap_esc(false);
+    win::take_focus(ov);
+  } else {
+    win::give_focus_back(ov);
+    hook::set_cap_esc(true);
+  }
+}
+
 #[tauri::command]
 fn ovl_hide() {
   *PASS.lock().unwrap_or_else(|e| e.into_inner()) = None;
+  hook::set_cap_esc(false);
+  let ov = h(&OVL);
+  // hand the keyboard back before hiding: otherwise Windows gives it to whatever window is next
+  if win::is_front(ov) {
+    win::give_focus_back(ov);
+  }
   unsafe {
     let _ = ShowWindow(h(&OVL), SW_HIDE);
   }
@@ -913,7 +935,7 @@ fn run_app(ctx: tauri::Context<tauri::Wry>, autostarted: bool) {
     .plugin(tauri_plugin_single_instance::init(|app, args, _cwd| on_second(app, args)))
     .register_uri_scheme_protocol("snap", |_ctx, req| serve(&req))
     .invoke_handler(tauri::generate_handler![
-      ovl_ready, ovl_hide, ovl_alive, ovl_pass, shot_do, card_hide, cfg_get, cfg_set, hk_record, set_paused, snap_now, hist_list, hist_del, hist_clear, hist_copy,
+      ovl_ready, ovl_hide, ovl_alive, ovl_pass, ovl_focus, shot_do, card_hide, cfg_get, cfg_set, hk_record, set_paused, snap_now, hist_list, hist_del, hist_clear, hist_copy,
       hist_text, hist_save, hist_open, hist_edit, copy_text, open_path, open_save_dir, default_save_dir, name_preview, groq_test, show_settings, quit,
       app_info, upd_check, upd_install, autostart, open_url, open_logs, log, win_ctl, ed_put
     ])
@@ -1038,6 +1060,9 @@ fn run_app(ctx: tauri::Context<tauri::Wry>, autostarted: bool) {
       hook::start(move |e| match e {
         hook::Ev::Hk(id) => match id.as_str() {
           "full" | "window" | "last" => quick(&hh, &id),
+          "cap_esc" => {
+            let _ = hh.emit_to("ovl", "cap_esc", 0);
+          }
           k => start_overlay(&hh, k),
         },
         hook::Ev::Rec { name, down, m } => {

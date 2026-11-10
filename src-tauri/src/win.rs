@@ -298,6 +298,15 @@ pub fn give_focus_back(h: HWND) {
   }
 }
 
+/// a shot starts: remember the window the user was writing in (none if one of ours is in front)
+pub fn remember_front() {
+  unsafe {
+    let fg = GetForegroundWindow();
+    let v = if !fg.0.is_null() && !own(fg) { fg.0 as isize } else { 0 };
+    PREV.store(v, Ordering::SeqCst);
+  }
+}
+
 /// remember the window in front (called when a dictation starts)
 pub fn note_front() {
   unsafe {

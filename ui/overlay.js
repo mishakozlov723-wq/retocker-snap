@@ -54,9 +54,15 @@
     try { await RS.invoke('ovl_ready', { n: d.n }); }
     finally {
       window.focus();
-      if (full) fullShot(); else st.intro(mx, my);
+      if (full) fullShot();
+      else { await painted(); if (state === 'idle' && D === d) st.intro(mx, my); }
     }
   }
+  // the window is really drawing (a frame went out), or 150 ms passed
+  const painted = () => new Promise(res => {
+    const t = setTimeout(res, 150);
+    requestAnimationFrame(() => requestAnimationFrame(() => { clearTimeout(t); res(); }));
+  });
   // the whole screen with the capsule or the round menu: the monitor under the mouse flows into it
   function fullShot() {
     const px = mx * dpr, py = my * dpr;

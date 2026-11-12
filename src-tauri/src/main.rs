@@ -34,6 +34,8 @@ static CARD: AtomicIsize = AtomicIsize::new(0);
 static MAIN: AtomicIsize = AtomicIsize::new(0);
 /// the overlay is up (or coming up): a second hotkey press is ignored
 static ACTIVE: AtomicBool = AtomicBool::new(false);
+/// the overlay is on screen empty, only to warm up (see `ovl_warm`)
+static WARM: AtomicBool = AtomicBool::new(false);
 // the round menu shows its own result, so its actions skip the corner card
 static NO_CARD: AtomicBool = AtomicBool::new(false);
 static SEQ: AtomicU64 = AtomicU64::new(0);
@@ -211,13 +213,39 @@ fn ovl_guard(app: AppHandle) {
       }
       if vis {
         let stale = now_ms().saturating_sub(ALIVE.load(Ordering::SeqCst)) > 4000;
-        if !ACTIVE.load(Ordering::SeqCst) || stale {
+        if (!ACTIVE.load(Ordering::SeqCst) || stale) && !WARM.load(Ordering::SeqCst) {
           logx::log(if stale { "overlay stopped answering: closing it" } else { "overlay open with nothing running: closing it" });
           let _ = app.emit_to("ovl", "abort", 0);
           ovl_hide();
         }
       }
     }
+  });
+}
+
+/// a webview that has never been on screen draws its first frames in jerks, so the first shot's dim flickered:
+/// right after the start the empty (fully transparent, click-through) overlay is shown for a moment
+fn ovl_warm() {
+  std::thread::spawn(|| {
+    std::thread::sleep(Duration::from_millis(1500));
+    let ov = h(&OVL);
+    if ov.0.is_null() || ACTIVE.load(Ordering::SeqCst) {
+      return;
+    }
+    WARM.store(true, Ordering::SeqCst);
+    win::set_clickthrough(ov, true);
+    unsafe {
+      let _ = ShowWindow(ov, SW_SHOWNOACTIVATE);
+    }
+    std::thread::sleep(Duration::from_millis(300));
+    // a shot that started meanwhile owns the window now
+    if !ACTIVE.load(Ordering::SeqCst) {
+      unsafe {
+        let _ = ShowWindow(ov, SW_HIDE);
+      }
+    }
+    win::set_clickthrough(ov, false);
+    WARM.store(false, Ordering::SeqCst);
   });
 }
 
@@ -968,6 +996,7 @@ fn run_app(ctx: tauri::Context<tauri::Wry>, autostarted: bool) {
       if let Ok(hw) = ovl.hwnd() {
         OVL.store(hw.0 as isize, Ordering::SeqCst);
         win::place(hw, RECT { left: v.x, top: v.y, right: v.x + v.w, bottom: v.y + v.h });
+        ovl_warm();
       }
 
       // the corner card after a snapshot

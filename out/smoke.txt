@@ -1,0 +1,68 @@
+exe: D:\a\retocker-snap\retocker-snap\src-tauri\target\release\retocker-snap.exe (12561408 bytes)
+settings visible: True
+cpu settings open: 0% ram 469 MB
+overlay visible: True
+card visible: True
+clipboard has an image: True
+radial: card visible False (should be False)
+overlay after Esc: False
+capsule burst: 14 frames in 800 ms
+capsule with the mouse away: overlay visible True
+cpu capsule up: 1% ram 645 MB
+capsule: card visible False (should be False)
+capsule: clipboard has an image: True
+capsule: overlay after Esc: False
+editor open burst: 14 frames in 820 ms
+editor close burst: 12 frames in 701 ms
+editor: clipboard image 538x236
+editor: overlay visible True
+editor: overlay after Esc: False
+capsule full: overlay visible True
+win+shift+s: overlay visible False
+after all flows: overlay visible False (should be False)
+cpu idle in tray: 0.2% ram 591 MB
+---- app log
+1794464330 start v0.4.23 autostart=false updated=
+1794464330 system PrintScreen snipping off: true
+1794464333 hotkeys: area, full, window, text, area
+1794464333 keyboard hook on (thread 7700)
+1794464370 grab 1024x768 in 23 ms
+1794464375 copy 700x420 in 14 ms
+1794464379 grab 1024x768 in 37 ms
+1794464382 copy 640x380 in 13 ms
+1794464385 grab 1024x768 in 32 ms
+1794464387 copy 640x380 in 29 ms
+1794464388 js: capsule up for 3 s
+1794464391 js: capsule closed: timer
+1794464393 grab 1024x768 in 32 ms
+1794464395 copy 640x380 in 15 ms
+1794464396 js: capsule up for 3 s
+1794464396 js: test_ed open
+1794464396 js: editor open 640x380, view 154,169,717,426
+1794464397 js: test_ed draw
+1794464400 js: test_ed draw: 6 steps
+1794464401 js: test_ed sel
+1794464401 js: test_ed sel: picked true, sel true, moved -32, grown 38, color #a77bff, 9 steps
+1794464403 js: test_ed pick
+1794464403 js: test_ed pick: #191919 color #191919 loupe true
+1794464404 js: test_ed crop
+1794464405 js: test_ed crop: view 538x236
+1794464406 js: test_ed undo
+1794464407 js: test_ed undo: 9 steps
+1794464408 js: test_ed redo
+1794464409 js: test_ed redo: 10 steps
+1794464410 js: test_ed close
+1794464410 editor copy 538x236
+1794464410 js: editor closed: test (edited, 10 steps)
+1794464411 js: capsule closed: key Escape
+1794464412 grab 1024x768 in 33 ms
+1794464413 copy 1024x768 in 58 ms
+1794464414 js: capsule up for 3 s
+1794464415 js: capsule closed: key Escape
+1794464417 grab 1024x768 in 26 ms
+1794464417 copy 1024x768 in 34 ms
+1794464421 keyboard hook missed a key: setting it up again
+1794464421 keyboard hook on (thread 7700)
+1794464423 key Esc held 00
+installer visible: True
+ok
